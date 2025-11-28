@@ -429,6 +429,56 @@ Answer:
     return "\n".join(prompt_parts)
 
 
+def is_garbage_output(answer: str) -> bool:
+    """
+    Detect if the model output is garbage (hallucinations, repetitive patterns, etc.)
+    """
+    if not answer or len(answer.strip()) < 20:
+        return True
+    
+    # Check for excessive repetition of the same word/token (like __getitem__ repeated)
+    words = answer.split()
+    if len(words) > 10:
+        # Count occurrences of each word
+        word_counts = {}
+        for word in words:
+            word_counts[word] = word_counts.get(word, 0) + 1
+        
+        # If any single word appears more than 30% of the time, it's likely garbage
+        max_count = max(word_counts.values())
+        if max_count > len(words) * 0.3:
+            return True
+    
+    # Check for patterns like "Calls (X): • method1 • method2 • method3..." repeated
+    # This indicates the model is just outputting the prompt structure
+    if answer.count("Calls (") > 3 or answer.count("•") > 50:
+        # If it's mostly bullet points with method names, it's likely garbage
+        bullet_lines = [line for line in answer.split('\n') if '•' in line]
+        if len(bullet_lines) > len(answer.split('\n')) * 0.5:
+            return True
+    
+    # Check for very low character diversity (repetitive characters)
+    unique_chars = len(set(answer.replace(' ', '').replace('\n', '').replace('•', '')))
+    if len(answer) > 100 and unique_chars < 10:
+        return True
+    
+    # Check if answer is mostly just method names or technical tokens
+    # (like __getitem__, __iter__, etc. repeated)
+    technical_tokens = ['__getitem__', '__iter__', '__next__', '__init__', '<operator>']
+    technical_count = sum(answer.count(token) for token in technical_tokens)
+    if technical_count > 20:
+        return True
+    
+    # Check if answer doesn't contain natural language words
+    natural_words = ['the', 'is', 'are', 'this', 'that', 'code', 'method', 'function', 
+                     'file', 'does', 'performs', 'handles', 'component', 'system']
+    has_natural_language = any(word in answer.lower() for word in natural_words)
+    if len(answer) > 200 and not has_natural_language:
+        return True
+    
+    return False
+
+
 def generate_answer(
     prompt: str,
     model_name: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
@@ -480,25 +530,47 @@ def generate_answer(
         if device == "cuda":
             inputs = {k: v.to(device) for k, v in inputs.items()}
         
-        # Generate
-        print("Generating answer...")
-        sys.stdout.flush()
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_length,
-                temperature=temperature,
-                do_sample=temperature > 0,
-                top_p=0.95,
-                repetition_penalty=1.1,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id
-            )
+        # Generate with retry logic for garbage detection
+        max_retries = 2
+        answer = None
         
-        # Decode - only decode the newly generated tokens (not the input)
-        input_length = inputs['input_ids'].shape[1]
-        generated_tokens = outputs[0][input_length:]
-        answer = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        for attempt in range(max_retries + 1):
+            if attempt > 0:
+                print(f"Retrying generation (attempt {attempt + 1}/{max_retries + 1})...")
+                sys.stdout.flush()
+                # Slightly adjust parameters on retry
+                retry_temperature = max(0.1, temperature * 0.8)
+                retry_repetition_penalty = 1.2  # Increase repetition penalty
+            else:
+                retry_temperature = temperature
+                retry_repetition_penalty = 1.1
+            
+            print("Generating answer..." if attempt == 0 else f"Generating answer (retry {attempt + 1})...")
+            sys.stdout.flush()
+            
+            with torch.no_grad():
+                outputs = model.generate(
+                    **inputs,
+                    max_new_tokens=max_length,
+                    temperature=retry_temperature,
+                    do_sample=retry_temperature > 0,
+                    top_p=0.95,
+                    repetition_penalty=retry_repetition_penalty,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                    no_repeat_ngram_size=3  # Prevent 3-gram repetition
+                )
+            
+            # Decode - only decode the newly generated tokens (not the input)
+            input_length = inputs['input_ids'].shape[1]
+            generated_tokens = outputs[0][input_length:]
+            answer = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            
+            # Quick check: if answer is clearly garbage, retry immediately
+            if attempt < max_retries and is_garbage_output(answer):
+                continue
+            else:
+                break
         
         # Clean up common artifacts and formatting
         answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
@@ -648,6 +720,10 @@ def generate_answer(
                         answer = ""
                     break
             answer = re.sub(r'(.)\1{3,}', '', answer)
+        
+        # Final check: if answer is still garbage after filtering, reject it
+        if answer and is_garbage_output(answer):
+            answer = "Unable to generate a clear answer. The model may need more context or the question may be too complex."
         
         # Final check: if answer is mostly repetitive characters, reject it
         if answer:

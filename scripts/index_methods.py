@@ -75,13 +75,36 @@ def embed_and_index(
         # This helps embeddings capture the essence of the method
         text_parts = []
         
-        # Method name first (most important for semantic matching)
-        # Repeat it for emphasis in the embedding
+        # File path FIRST if it contains important keywords (train, eval, test, etc.)
+        # This helps with queries like "where is training" or "where is evaluation"
+        file_path = method.get("filePath", "")
         method_name = method.get("methodName", "")
+        
+        # Check if file path contains important keywords
+        important_keywords = ["train", "eval", "test", "validation", "infer", "predict"]
+        file_path_lower = file_path.lower()
+        has_important_keyword = any(keyword in file_path_lower for keyword in important_keywords)
+        
+        if file_path and has_important_keyword:
+            # Put file path first for training/eval files
+            path_parts = file_path.replace("\\", "/").split("/")
+            if len(path_parts) > 1:
+                text_parts.append(f"File: {'/'.join(path_parts[-2:])}")
+            else:
+                text_parts.append(f"File: {file_path}")
+            # Also include just the filename for emphasis
+            filename = path_parts[-1] if path_parts else file_path
+            text_parts.append(filename)
+        
+        # Method name (most important for semantic matching)
+        # Repeat it for emphasis in the embedding
         if method_name and method_name != "<module>":
             text_parts.append(f"Method: {method_name}")
             # Also include just the name for better matching
             text_parts.append(method_name)
+            # For "main" methods, add context that it's an entry point
+            if method_name == "main" and has_important_keyword:
+                text_parts.append("entry point main function")
         
         # Full name (includes namespace/class context)
         full_name = method.get("fullName", "")
@@ -118,9 +141,8 @@ def embed_and_index(
                 if meaningful_callees:
                     text_parts.append(f"Calls methods: {', '.join(meaningful_callees)}")
         
-        # File path (context - less important but useful)
-        if method.get("filePath"):
-            file_path = method["filePath"]
+        # File path (if not already added at the beginning)
+        if file_path and not has_important_keyword:
             # Extract meaningful parts of path (directory names can be semantic)
             path_parts = file_path.replace("\\", "/").split("/")
             if len(path_parts) > 1:

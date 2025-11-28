@@ -90,9 +90,20 @@ def retrieve_methods(
             
             # Filter out <module> and operator entries if requested
             if filter_modules:
+                file_path = metadata.get("file_path", "")
+                file_path_lower = file_path.lower()
+                
+                # Don't filter <module> entries from important files (train, eval, test, etc.)
+                # These often contain the main logic
+                important_keywords = ["train", "eval", "test", "validation", "infer", "predict", "main"]
+                is_important_file = any(keyword in file_path_lower for keyword in important_keywords)
+                
                 # Filter out low-level operators and meta methods
-                if (method_name == "<module>" or 
-                    method_name.startswith("<operator") or 
+                # But keep <module> from important files
+                if method_name == "<module>":
+                    if not is_important_file:
+                        continue
+                elif (method_name.startswith("<operator") or 
                     method_name.startswith("<init") or
                     method_name.startswith("<meta") or
                     method_name == "item" or

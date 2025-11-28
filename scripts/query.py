@@ -568,16 +568,13 @@ def generate_answer(
             # Quick check: if answer is clearly garbage, retry immediately
             if attempt < max_retries and is_garbage_output(answer):
                 continue
-            else:
-                break
-        
-        # Clean up common artifacts and formatting
-        answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
-        answer = answer.replace("[/INST]", "").replace("<|assistant|>", "").strip()
-        
-        # Check if output is garbage - if so, retry immediately
-        if attempt < max_retries and is_garbage_output(answer):
-            continue
+            
+            # Clean up common artifacts and formatting
+            answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
+            answer = answer.replace("[/INST]", "").replace("<|assistant|>", "").strip()
+            
+            # If we got here, answer passed garbage check - break out of retry loop
+            break
         
         # Remove any remaining prompt artifacts
         if "YOUR ANSWER" in answer:

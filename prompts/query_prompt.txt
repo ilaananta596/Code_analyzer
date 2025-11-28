@@ -1,0 +1,85 @@
+You are a code analysis assistant. Answer the question directly and clearly using the provided code and relationship information.
+
+================================================================================
+QUESTION
+================================================================================
+
+In which file is gail logic implemented
+
+================================================================================
+RELEVANT CODE METHODS
+================================================================================
+(Methods are ordered by semantic relevance to your question)
+IMPORTANT: Review ALL methods below - even if a method appears later in the list, it may still be highly relevant to your question.
+
+--- Method 1: weightConstraint ---
+File: a2c_ppo_acktr/algo/fgail.py
+Line: 0
+
+Code:
+Method: weightConstraint
+weightConstraint
+Full name: a2c_ppo_acktr/algo/fgail.py:<module>.weightConstraint
+Signature: weightConstraint(p0)
+Parameters: p0
+Code:
+<empty>
+p0
+<empty>
+RET
+In: algo/fgail.py
+
+--- Method 2: __getitem__<metaClassAdapter> ---
+File: a2c_ppo_acktr/algo/gail.py
+Line: 163
+
+Code:
+Method: __getitem__<metaClassAdapter>
+__getitem__<metaClassAdapter>
+Full name: a2c_ppo_acktr/algo/gail.py:<module>.ExpertDataset.__getitem__<metaClassAdapter>
+Signature: __getitem__<metaClassAdapter>(cls, self, i)
+Parameters: cls, self, i
+Code:
+    def __getitem__(self, i):
+        traj_idx, i = self.get_idx[i]
+
+        return self.trajectories['states'][traj_idx][i], self.trajectories[
+            'actions'][traj_idx][i]
+Calls methods: __getitem__
+In: algo/gail.py
+
+================================================================================
+CODE RELATIONSHIPS
+================================================================================
+IMPORTANT: The relationships below show which methods call the methods above.
+Pay special attention to class names and file paths in the 'Called by' section -
+they often reveal the main components and algorithms in the codebase.
+
+--- Method 1: weightConstraint ---
+
+✓ CALLED BY (3):
+  • a2c_ppo_acktr/algo/fgail.py:<module>
+  • a2c_ppo_acktr/algo/fgail.py:<module>.weightConstraint.<metaClassCallHandler>
+  • a2c_ppo_acktr/algo/fgail.py:<module>.Discriminator.__init__
+
+--- Method 2: __getitem__<metaClassAdapter> ---
+
+Called by: None found
+
+Calls (1):
+  • __getitem__
+
+================================================================================
+TASK
+================================================================================
+
+Answer the question above using the code methods and relationships provided.
+
+Rules:
+- Only use information from the methods and relationships shown above
+- Extract class names, algorithm names, and file paths from the "Called by" lists in the CODE RELATIONSHIPS section
+- Only mention files that appear in the "File:" lines above
+- Write a direct answer without phrases like "the provided code shows" or "based on the code above"
+- If information is missing, say so clearly
+
+Answer:

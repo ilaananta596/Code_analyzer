@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Conda
+*.conda
+
+# Data and models
+data/
+*.cpg.bin
+*.json
+models/*.bin
+models/*.safetensors
+models/*.gguf
+
+# ChromaDB
+chromadb/
+*.chroma
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test and temporary files
+prompts/test_*.txt
+prompts/final_*.txt
+prompts/*_query.txt
+prompts/query.txt
+prompts/training_query.txt
+

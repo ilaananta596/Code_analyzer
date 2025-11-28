@@ -1,0 +1,25 @@
+# Core dependencies for GraphRAG code analysis system
+chromadb>=0.4.0
+sentence-transformers>=2.2.2
+transformers>=4.25.0
+torch>=2.0.0
+numpy>=1.21.0
+scikit-learn>=1.0.0
+
+# For LLM inference (open-source models)
+# Using transformers library for local inference
+# Optionally: llama-cpp-python for GGUF models, or vllm for faster inference
+# vllm>=0.2.0  # Uncomment if you want to use vLLM for faster inference
+
+# Utilities
+tqdm>=4.66.0
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# For parsing and code analysis
+tree-sitter>=0.20.4
+tree-sitter-python>=0.20.4
+tree-sitter-java>=0.20.1
+tree-sitter-javascript>=0.20.3
+tree-sitter-cpp>=0.20.0
+

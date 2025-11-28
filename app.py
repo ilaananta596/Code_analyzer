@@ -208,7 +208,7 @@ with tab1:
                 methods_json = Path("data") / f"methods_{st.session_state.project_name}.json"
                 
                 python_cmd = get_python_cmd()
-                cmd = f'{python_cmd} scripts/index_methods.py --methods-json "{methods_json}" --project-name "{st.session_state.project_name}" --embedding-model "{embedding_model}"'
+                cmd = f'{python_cmd} scripts/index_methods.py "{methods_json}" --project-name "{st.session_state.project_name}" --embedding-model "{embedding_model}"'
                 
                 success, output = run_command(cmd, "Indexing methods in ChromaDB...")
                 

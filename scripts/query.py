@@ -416,12 +416,14 @@ def build_prompt(
     prompt_parts.append("""
 Answer the question above using the code methods and relationships provided.
 
-Rules:
-- Only use information from the methods and relationships shown above
+CRITICAL RULES:
+- DO NOT reference the prompt structure, context, or code snippets in your answer
+- DO NOT use phrases like "based on the provided information", "in the given code snippets", "the provided code shows", "based on the code above", "in the provided context", "from the information above"
+- Write as if you are directly answering the question from your knowledge of the codebase
+- The user does NOT see the code snippets or context - they only see your answer
 - Extract class names, algorithm names, and file paths from the "Called by" lists in the CODE RELATIONSHIPS section
 - Only mention files that appear in the "File:" lines above
-- Write a direct answer without phrases like "the provided code shows" or "based on the code above"
-- If information is missing, say so clearly
+- If information is missing, say so clearly without referencing what was or wasn't provided
 
 Answer:
 """)

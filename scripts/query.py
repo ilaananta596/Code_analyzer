@@ -433,33 +433,14 @@ Answer:
 
 def is_garbage_output(answer: str) -> bool:
     """
-    Detect if the model output is garbage (hallucinations, repetitive patterns, corrupted text, etc.)
+    Detect if the model output is garbage (hallucinations, repetitive patterns, etc.)
     Generic detection that works for any query type.
     """
     if not answer or len(answer.strip()) < 20:
         return True
     
-    # Check for corrupted text patterns (typos, random characters, etc.)
-    # Look for excessive typos or corrupted words (words with many repeated/random chars)
-    words = answer.split()
-    if len(words) > 5:
-        corrupted_word_count = 0
-        for word in words:
-            # Check for words with excessive character repetition or weird patterns
-            if len(word) > 3:
-                # Check for excessive repeated characters (like "ddeeplab4p5")
-                if len(set(word.lower())) < len(word) * 0.4 and len(word) > 6:
-                    corrupted_word_count += 1
-                # Check for words with numbers mixed inappropriately (like "eeblabvres502Dpy")
-                if any(c.isdigit() for c in word) and any(c.isalpha() for c in word):
-                    if len([c for c in word if c.isdigit()]) > 2:
-                        corrupted_word_count += 1
-        
-        # If more than 20% of words look corrupted, it's garbage
-        if corrupted_word_count > len(words) * 0.2:
-            return True
-    
     # Check for excessive repetition of the same word/token
+    words = answer.split()
     if len(words) > 10:
         word_counts = {}
         for word in words:
@@ -486,12 +467,6 @@ def is_garbage_output(answer: str) -> bool:
         bullet_lines = [line for line in answer.split('\n') if '•' in line]
         if len(bullet_lines) > len(answer.split('\n')) * 0.5:
             return True
-    
-    # Check for phrases that indicate the model is confused or asking for help
-    confusion_phrases = ["Please provide the answer", "Please provide", "I need", "I cannot", 
-                         "Typo in", "** Typo", "AssertionError", "should be"]
-    if any(phrase in answer for phrase in confusion_phrases):
-        return True
     
     # Check if answer doesn't contain natural language (for longer outputs)
     if len(answer) > 200:

@@ -1,5 +1,7 @@
 # GraphRAG Code Analysis System
 
+A GraphRAG-style code analysis system that combines semantic retrieval, graph analysis, and LLM reasoning to answer questions about codebases.
+
 A code analysis system that combines semantic search (ChromaDB), graph analysis (Joern), and open-source LLMs to answer questions about large codebases.
 
 ## Architecture
@@ -181,6 +183,56 @@ Edit `models/config.yaml` to customize:
 **Embedding Models:**
 - **microsoft/graphcodebert-base** (default): Code-specialized embeddings
 - **sentence-transformers/all-MiniLM-L6-v2**: Smaller, faster alternative
+
+## Web Interface (Streamlit)
+
+The system includes a Streamlit web interface for easy interaction:
+
+### Running the Web Interface
+
+1. **On a remote machine (via SSH):**
+   ```bash
+   # Run the Streamlit app
+   ./run_streamlit.sh
+   
+   # Or specify a custom port
+   ./run_streamlit.sh 8502
+   ```
+
+2. **Access from your local machine:**
+   ```bash
+   # Set up SSH port forwarding
+   ssh -L 8501:localhost:8501 user@remote-machine
+   
+   # Then open in your browser
+   http://localhost:8501
+   ```
+
+3. **Or run directly:**
+   ```bash
+   streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+   ```
+
+### Using the Web Interface
+
+1. **Setup Tab:**
+   - Enter a GitHub repository URL or local path
+   - Click "Build CPG" to generate the Code Property Graph
+   - Click "Extract Methods" to extract methods from the CPG
+   - Click "Index Methods" to index methods in ChromaDB
+
+2. **Query Tab:**
+   - Enter your question about the codebase
+   - Click "Generate Answer" to get the analysis
+   - View the answer and full output
+
+### Configuration
+
+The sidebar allows you to configure:
+- **Device**: GPU (cuda) or CPU
+- **Top K Methods**: Number of methods to retrieve (3-20)
+- **LLM Model**: HuggingFace model for reasoning
+- **Embedding Model**: HuggingFace model for embeddings
 
 ## Limitations
 

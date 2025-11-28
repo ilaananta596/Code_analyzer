@@ -244,9 +244,10 @@ def build_prompt(
     """
     prompt_parts = []
     
-    # No need to detect question type - use generic prompt for all questions
-    
-    prompt_parts.append("You are a code analysis assistant. Answer the question directly and clearly using the provided code and relationship information.")
+    # Start with the question first so the model knows what to answer
+    prompt_parts.append("You are a code analysis assistant.")
+    prompt_parts.append(f"\nQuestion: {question}")
+    prompt_parts.append("\nBelow is relevant code and relationship information to help answer this question.")
     prompt_parts.append("\n" + "=" * 80)
     prompt_parts.append("QUESTION")
     prompt_parts.append("=" * 80)
@@ -404,12 +405,19 @@ def build_prompt(
             if filtered_callees:
                 prompt_parts.append(f"Calls: {', '.join(filtered_callees[:10])}")
     
-    # Simple, clear instructions
+    # Simple, clear instructions - be very explicit
     prompt_parts.append("\n" + "=" * 80)
-    prompt_parts.append("TASK")
+    prompt_parts.append("INSTRUCTIONS")
     prompt_parts.append("=" * 80)
-    prompt_parts.append("Based on the code methods and relationships shown above, answer the question.")
-    prompt_parts.append("Provide a clear, direct answer without repeating the code structure or format.")
+    prompt_parts.append("You are a code analysis assistant. Based on the code methods and relationships shown above, answer the following question in natural language.")
+    prompt_parts.append("")
+    prompt_parts.append("IMPORTANT: Write a natural language answer. Do NOT copy or repeat:")
+    prompt_parts.append("- Method names with '--- Method X: name ---' format")
+    prompt_parts.append("- 'Called by:' or 'Calls:' lines")
+    prompt_parts.append("- Code fragments or variable names")
+    prompt_parts.append("")
+    prompt_parts.append("Instead, explain what the functions do in plain English.")
+    prompt_parts.append("\nQuestion: " + question)
     prompt_parts.append("\nAnswer:")
     
     return "\n".join(prompt_parts)
@@ -449,11 +457,20 @@ def generate_answer(
         print("✓ Model loaded")
         
         # Use chat template if available (for instruction models)
+        # For Qwen models, the chat template should handle the formatting
         if hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template:
             messages = [{"role": "user", "content": prompt}]
             formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         else:
             formatted_prompt = prompt
+        
+        
+        # For Qwen models, ensure we're using the right format
+        # Qwen models sometimes need explicit instruction format
+        if "qwen" in model_name.lower():
+            # Make sure the prompt ends with a clear instruction
+            if not formatted_prompt.rstrip().endswith("Answer:"):
+                formatted_prompt = formatted_prompt.rstrip() + "\n\nAnswer:"
         
         # Tokenize with larger context window
         inputs = tokenizer(
@@ -485,6 +502,7 @@ def generate_answer(
         input_length = inputs['input_ids'].shape[1]
         generated_tokens = outputs[0][input_length:]
         answer = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        
         
         # If the answer is mostly prompt structure fragments, try to extract actual content
         # Check if answer starts with prompt structure markers

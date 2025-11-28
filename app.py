@@ -33,6 +33,24 @@ if 'project_name' not in st.session_state:
 if 'cpg_path' not in st.session_state:
     st.session_state.cpg_path = None
 
+def get_python_cmd():
+    """Get the correct Python command (prefer conda environment)"""
+    # Try to find conda environment
+    conda_base = os.environ.get('CONDA_PREFIX')
+    if conda_base:
+        python_cmd = os.path.join(conda_base, 'bin', 'python')
+        if os.path.exists(python_cmd):
+            return python_cmd
+    
+    # Try common conda paths
+    for base in [os.path.expanduser("~/miniconda3"), os.path.expanduser("~/anaconda3")]:
+        python_cmd = os.path.join(base, "envs", "graphrag", "bin", "python")
+        if os.path.exists(python_cmd):
+            return python_cmd
+    
+    # Fallback to system python
+    return "python"
+
 def run_command(cmd, description):
     """Run a command and show progress"""
     with st.spinner(description):
@@ -42,14 +60,14 @@ def run_command(cmd, description):
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=600  # 10 minutes for CPG building
             )
             if result.returncode == 0:
                 return True, result.stdout
             else:
                 return False, result.stderr
         except subprocess.TimeoutExpired:
-            return False, "Command timed out after 5 minutes"
+            return False, "Command timed out after 10 minutes"
         except Exception as e:
             return False, str(e)
 
@@ -166,13 +184,7 @@ with tab1:
             else:
                 methods_json = Path("data") / f"methods_{st.session_state.project_name}.json"
                 
-                # Use conda environment if available
-                python_cmd = "python"
-                if os.path.exists(os.path.expanduser("~/miniconda3/envs/graphrag/bin/python")):
-                    python_cmd = os.path.expanduser("~/miniconda3/envs/graphrag/bin/python")
-                elif os.path.exists(os.path.expanduser("~/anaconda3/envs/graphrag/bin/python")):
-                    python_cmd = os.path.expanduser("~/anaconda3/envs/graphrag/bin/python")
-                
+                python_cmd = get_python_cmd()
                 cmd = f'{python_cmd} scripts/extract_methods.py --cpg-path "{st.session_state.cpg_path}" --output "{methods_json}"'
                 
                 success, output = run_command(cmd, "Extracting methods from CPG...")
@@ -193,13 +205,7 @@ with tab1:
             else:
                 methods_json = Path("data") / f"methods_{st.session_state.project_name}.json"
                 
-                # Use conda environment if available
-                python_cmd = "python"
-                if os.path.exists(os.path.expanduser("~/miniconda3/envs/graphrag/bin/python")):
-                    python_cmd = os.path.expanduser("~/miniconda3/envs/graphrag/bin/python")
-                elif os.path.exists(os.path.expanduser("~/anaconda3/envs/graphrag/bin/python")):
-                    python_cmd = os.path.expanduser("~/anaconda3/envs/graphrag/bin/python")
-                
+                python_cmd = get_python_cmd()
                 cmd = f'{python_cmd} scripts/index_methods.py --methods-json "{methods_json}" --project-name "{st.session_state.project_name}" --embedding-model "{embedding_model}"'
                 
                 success, output = run_command(cmd, "Indexing methods in ChromaDB...")
@@ -253,13 +259,7 @@ with tab2:
                 st.error("Please enter a question")
             else:
                 with st.spinner("Generating answer..."):
-                    # Use conda environment if available
-                    python_cmd = "python"
-                    if os.path.exists(os.path.expanduser("~/miniconda3/envs/graphrag/bin/python")):
-                        python_cmd = os.path.expanduser("~/miniconda3/envs/graphrag/bin/python")
-                    elif os.path.exists(os.path.expanduser("~/anaconda3/envs/graphrag/bin/python")):
-                        python_cmd = os.path.expanduser("~/anaconda3/envs/graphrag/bin/python")
-                    
+                    python_cmd = get_python_cmd()
                     cmd = (
                         f'{python_cmd} scripts/query.py '
                         f'--question "{query}" '

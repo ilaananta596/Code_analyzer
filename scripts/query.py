@@ -436,6 +436,15 @@ def is_garbage_output(answer: str) -> bool:
     if not answer or len(answer.strip()) < 20:
         return True
     
+    # Quick check: if it's a question instead of an answer
+    question_indicators = ["Created Question", "**Created Question**", "Question:", "**Question**"]
+    if any(indicator in answer for indicator in question_indicators):
+        return True
+    
+    # Check if answer starts with a question word and ends with ?
+    if answer.strip().startswith(("What ", "How ", "Why ", "When ", "Where ", "Who ", "Which ")) and answer.strip().endswith("?"):
+        return True
+    
     # Check for excessive repetition of the same word/token (like __getitem__ repeated)
     words = answer.split()
     if len(words) > 10:
@@ -576,11 +585,26 @@ def generate_answer(
         answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
         answer = answer.replace("[/INST]", "").replace("<|assistant|>", "").strip()
         
+        # Quick fix: Detect if model generated a question instead of answer
+        question_indicators = ["Created Question", "**Created Question**", "Question:", "**Question**"]
+        if any(indicator in answer for indicator in question_indicators):
+            # This is garbage - model generated a question, retry
+            if attempt < max_retries:
+                continue
+        
         # Remove any remaining prompt artifacts
         if "YOUR ANSWER" in answer:
             answer = answer.split("YOUR ANSWER")[-1].strip()
         if "Your answer:" in answer:
             answer = answer.split("Your answer:")[-1].strip()
+        
+        # Remove question-like patterns at the start
+        if answer.startswith(("What ", "How ", "Why ", "When ", "Where ", "Who ", "Which ")):
+            # Check if it's actually a question (ends with ?)
+            if answer.strip().endswith("?"):
+                # This looks like a question, not an answer - retry
+                if attempt < max_retries:
+                    continue
         
         # Remove prompt instruction fragments that might leak into the answer
         instruction_phrases = [

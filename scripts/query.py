@@ -235,7 +235,8 @@ def get_graph_neighborhood(
 def build_prompt(
     question: str,
     methods: List[Dict[str, Any]],
-    graph_data: List[Dict[str, Any]]
+    graph_data: List[Dict[str, Any]],
+    project_name: Optional[str] = None
 ) -> str:
     """
     Build a prompt for the LLM with question, code, and graph context.
@@ -250,6 +251,52 @@ def build_prompt(
     prompt_parts.append("QUESTION")
     prompt_parts.append("=" * 80)
     prompt_parts.append(f"\n{question}\n")
+    
+    # Load methods JSON to get actual source code (not CPG representations)
+    methods_json_data = {}
+    if project_name:
+        methods_json_path = Path("data") / f"methods_{project_name}.json"
+        if methods_json_path.exists():
+            try:
+                with open(methods_json_path, 'r') as f:
+                    methods_json_data = json.load(f)
+            except Exception as e:
+                print(f"Warning: Could not load methods JSON: {e}")
+    
+    # Helper to get actual source code from methods JSON
+    def get_actual_source_code(metadata: Dict[str, Any], document: str) -> str:
+        """Get actual source code from methods JSON if available, otherwise use document"""
+        if not methods_json_data or "methods" not in methods_json_data:
+            return document
+        
+        method_name = metadata.get('method_name', '')
+        file_path = metadata.get('file_path', '')
+        
+        # Find matching method in JSON
+        for method in methods_json_data["methods"]:
+            if (method.get("methodName") == method_name and 
+                method.get("filePath") == file_path):
+                # Use actual source code if available
+                code = method.get("code", "")
+                if code and code != "<empty>" and len(code.strip()) > 30:
+                    # Check if it's actual source code (not CPG representation)
+                    # CPG representations often have patterns like tmp\d+, __iter__, etc.
+                    if not re.search(r'tmp\d+|__iter__|__next__|manager_tmp', code):
+                        return code
+                break
+        
+        # Fallback to document, but try to extract code from it
+        # The document might have "Code:\n..." format
+        if "Code:\n" in document:
+            code_section = document.split("Code:\n", 1)[1]
+            # Take first part before next section
+            if "\nCalls:" in code_section:
+                code_section = code_section.split("\nCalls:")[0]
+            if "\nIn:" in code_section:
+                code_section = code_section.split("\nIn:")[0]
+            return code_section.strip()
+        
+        return document
     
     # Filter methods: only include those with code and valid file path
     # Generic filtering that works for any repository
@@ -314,7 +361,10 @@ def build_prompt(
         prompt_parts.append(f"\n--- Method {i}: {method_name} ---")
         prompt_parts.append(f"File: {file_path}")
         prompt_parts.append(f"Line: {metadata.get('line_number', 'unknown')}")
-        prompt_parts.append(f"\nCode:\n{method.get('document', '')}")
+        
+        # Use actual source code from methods JSON instead of CPG document
+        actual_code = get_actual_source_code(metadata, method.get('document', ''))
+        prompt_parts.append(f"\nCode:\n{actual_code}")
     
     # Add graph neighborhood with emphasis on callers for "who calls" questions
     prompt_parts.append("\n" + "=" * 80)
@@ -811,7 +861,7 @@ def main():
     if not args.no_llm:
         print(f"\nStep 3: Generating answer with LLM '{llm_model_name}'...")
         sys.stdout.flush()
-        prompt = build_prompt(args.question, methods, graph_data)
+        prompt = build_prompt(args.question, methods, graph_data, args.project_name)
         
         # Dump prompt to file if requested
         if args.dump_prompt:

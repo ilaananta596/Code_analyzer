@@ -331,8 +331,14 @@ with tab2:
                         with st.expander("📋 Full Output"):
                             st.text(output)
                     else:
-                        st.error("Failed to generate answer")
-                        st.text(result.stderr)
+                        st.error(f"Query failed with return code {process.returncode}")
+                        st.code(output, language="text")
+                except subprocess.TimeoutExpired:
+                    if 'process' in locals():
+                        process.kill()
+                    st.error("Query timed out after 10 minutes")
+                except Exception as e:
+                    st.error(f"Error running query: {str(e)}")
 
 # Footer
 st.markdown("---")

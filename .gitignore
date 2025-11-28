@@ -45,3 +45,6 @@ prompts/*_query.txt
 prompts/query.txt
 prompts/training_query.txt
 
+# Workspace and temporary directories
+workspace/
+

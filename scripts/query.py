@@ -408,23 +408,13 @@ def build_prompt(
     prompt_parts.append("\n" + "=" * 80)
     prompt_parts.append("TASK")
     prompt_parts.append("=" * 80)
-    prompt_parts.append("""
-Answer the question above using the code methods and relationships provided.
-
-Rules:
-- Only use information from the methods and relationships shown above
-- Extract class names, algorithm names, and file paths from the "Called by" lists in the CODE RELATIONSHIPS section
-- Only mention files that appear in the "File:" lines above
-- Write a direct answer without phrases like "the provided code shows" or "based on the code above"
-- If information is missing, say so clearly
-- The user does NOT see the code snippets or context - they only see your answer
-
-Answer:
-""")
+    prompt_parts.append("Based on the code methods and relationships shown above, answer the question.")
+    prompt_parts.append("Provide a clear, direct answer without repeating the code structure or format.")
+    prompt_parts.append("\nAnswer:")
     
     return "\n".join(prompt_parts)
 
-
+#- The user does NOT see the code snippets or context - they only see your answer
 def generate_answer(
     prompt: str,
     model_name: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
@@ -495,6 +485,37 @@ def generate_answer(
         input_length = inputs['input_ids'].shape[1]
         generated_tokens = outputs[0][input_length:]
         answer = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        
+        # If the answer is mostly prompt structure fragments, try to extract actual content
+        # Check if answer starts with prompt structure markers
+        if answer.strip().startswith(("--- Method", ",", "int", "astype")) or "--- Method" in answer[:100]:
+            # The model is copying the prompt structure - try to find actual answer content
+            # Look for sentences that don't contain structure markers
+            lines = answer.split('\n')
+            content_lines = []
+            for line in lines:
+                line_stripped = line.strip()
+                # Skip structure lines
+                if re.match(r'^--- Method \d+:', line_stripped) or line_stripped.startswith(("Called by:", "Calls:")):
+                    continue
+                # Skip lines that are just fragments (very short, no verbs)
+                if len(line_stripped) > 20 and not re.match(r'^[,\s\w]+$', line_stripped):
+                    content_lines.append(line)
+            if content_lines:
+                answer = '\n'.join(content_lines).strip()
+            # If still no good content, try extracting from later in the response
+            if not answer or len(answer) < 30:
+                # Look for the first sentence that looks like an answer
+                words = answer.split()
+                for i in range(len(words) - 5):
+                    snippet = ' '.join(words[i:i+10])
+                    if not any(marker in snippet for marker in ["---", "Method", "Called by", "Calls:"]):
+                        # Found a snippet without structure markers
+                        answer = ' '.join(words[i:])
+                        break
+        
+        # Store original answer for debugging if needed
+        original_answer = answer
         
         # Clean up common artifacts and formatting
         answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
@@ -606,8 +627,19 @@ def generate_answer(
             # Skip lines that are just repeated characters (4+ same chars)
             if len(line_lower) > 5 and len(set(line_lower.replace(' ', ''))) <= 1:
                 continue
+            # Skip lines that contain prompt structure fragments (generic check)
+            # Only skip if it's clearly a structure line (contains method number or is very short)
+            if re.search(r'--- Method \d+:', line) or (len(line.strip()) < 50 and ("Called by" in line or "Calls:" in line)):
+                continue
             filtered_lines.append(line)
         answer = '\n'.join(filtered_lines).strip()
+        
+        # Remove prompt structure fragments that might appear inline (but be careful not to remove too much)
+        # Only remove if it's clearly a structure fragment, not if it's part of a sentence
+        answer = re.sub(r'--- Method \d+:.*?---', '', answer)
+        # Only remove "Called by:" or "Calls:" if they appear at the start of a line (structure format)
+        answer = re.sub(r'^Called by:.*$', '', answer, flags=re.MULTILINE)
+        answer = re.sub(r'^Calls:.*$', '', answer, flags=re.MULTILINE)
         
         # If answer is too short, try extracting from full response
         if len(answer) < 50:

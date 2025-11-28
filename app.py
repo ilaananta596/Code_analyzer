@@ -187,7 +187,7 @@ with tab1:
                 methods_json = Path("data") / f"methods_{st.session_state.project_name}.json"
                 
                 python_cmd = get_python_cmd()
-                cmd = f'{python_cmd} scripts/extract_methods.py --cpg-path "{st.session_state.cpg_path}" --output "{methods_json}"'
+                cmd = f'{python_cmd} scripts/extract_methods.py "{st.session_state.cpg_path}" --output "{methods_json}"'
                 
                 success, output = run_command(cmd, "Extracting methods from CPG...")
                 

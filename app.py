@@ -161,10 +161,12 @@ with tab1:
                 cpg_dir.mkdir(parents=True, exist_ok=True)
                 cpg_path = cpg_dir / f"{project_name}.cpg.bin"
                 
+                python_cmd = get_python_cmd()
+                
                 if is_github:
-                    cmd = f'python scripts/build_cpg.py --source "{normalized_url}" --output "{cpg_path}"'
+                    cmd = f'{python_cmd} scripts/build_cpg.py "{normalized_url}" --output "{cpg_path}"'
                 else:
-                    cmd = f'python scripts/build_cpg.py --source "{repo_input}" --output "{cpg_path}"'
+                    cmd = f'{python_cmd} scripts/build_cpg.py "{repo_input}" --output "{cpg_path}"'
                 
                 success, output = run_command(cmd, f"Building CPG for {project_name}...")
                 

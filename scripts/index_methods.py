@@ -86,7 +86,7 @@ def embed_and_index(
         has_important_keyword = any(keyword in file_path_lower for keyword in important_keywords)
         
         if file_path and has_important_keyword:
-            # Put file path first for training/eval files
+            # Put file path first for training/eval files (ALWAYS, even for <module>)
             path_parts = file_path.replace("\\", "/").split("/")
             if len(path_parts) > 1:
                 text_parts.append(f"File: {'/'.join(path_parts[-2:])}")
@@ -95,6 +95,10 @@ def embed_and_index(
             # Also include just the filename for emphasis
             filename = path_parts[-1] if path_parts else file_path
             text_parts.append(filename)
+            # For training files, add explicit keywords
+            if "train" in file_path_lower:
+                text_parts.append("training")
+                text_parts.append("train")
         
         # Method name (most important for semantic matching)
         # Repeat it for emphasis in the embedding
@@ -105,6 +109,11 @@ def embed_and_index(
             # For "main" methods, add context that it's an entry point
             if method_name == "main" and has_important_keyword:
                 text_parts.append("entry point main function")
+        elif method_name == "<module>" and has_important_keyword:
+            # For <module> entries in important files, add context
+            if "train" in file_path_lower:
+                text_parts.append("training script")
+                text_parts.append("training code")
         
         # Full name (includes namespace/class context)
         full_name = method.get("fullName", "")

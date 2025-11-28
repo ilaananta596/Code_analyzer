@@ -71,8 +71,8 @@ def retrieve_methods(
     question_embedding = embedding_model.encode(question, convert_to_numpy=True)
     
     # Query more results if filtering modules to ensure we get enough non-module methods
-    # Use a larger multiplier to ensure we get enough results
-    query_k = top_k * 8 if filter_modules else top_k
+    # Use a larger multiplier to ensure we get enough results after filtering
+    query_k = top_k * 20 if filter_modules else top_k
     
     # Query ChromaDB with semantic similarity
     results = collection.query(
@@ -103,9 +103,9 @@ def retrieve_methods(
                     len(method_name) <= 2):  # Single letter methods are usually operators
                     continue
                 
-                # Filter out methods with empty or very short code
+                # Filter out methods with empty or very short code (relaxed threshold)
                 document = results["documents"][0][i]
-                if not document or len(document.strip()) < 50:
+                if not document or len(document.strip()) < 30:
                     continue
                 
                 # Filter out methods from unknown files (usually internal/operator methods)
@@ -133,11 +133,11 @@ def retrieve_methods(
                 # Use the worst distance from collected methods as threshold
                 max_distance = max(m.get("distance", 1.0) for m in methods if m.get("distance") is not None)
                 if max_distance:
-                    # Be more lenient: allow 2x worse distance, but cap at 0.8 (more permissive)
-                    max_distance = min(max_distance * 2.0, 0.8)
+                    # Be more lenient: allow 2.5x worse distance, but cap at 0.9 (more permissive)
+                    max_distance = min(max_distance * 2.5, 0.9)
             else:
-                # If no methods found yet, be very permissive
-                max_distance = 0.8
+                # If no methods found yet, be very permissive (allow up to 0.9 distance)
+                max_distance = 0.9
             
             for i in range(len(results["ids"][0])):
                 if len(methods) >= top_k:

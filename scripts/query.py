@@ -430,55 +430,6 @@ Answer:
     return "\n".join(prompt_parts)
 
 
-def is_garbage_output(answer: str) -> bool:
-    """
-    Detect if the model output is garbage (hallucinations, repetitive patterns, etc.)
-    Generic detection that works for any query type.
-    """
-    if not answer or len(answer.strip()) < 20:
-        return True
-    
-    # Check for excessive repetition of the same word/token
-    words = answer.split()
-    if len(words) > 10:
-        word_counts = {}
-        for word in words:
-            word_counts[word] = word_counts.get(word, 0) + 1
-        
-        # If any single word appears more than 30% of the time, it's likely garbage
-        max_count = max(word_counts.values())
-        if max_count > len(words) * 0.3:
-            return True
-    
-    # Check for very low character diversity (repetitive characters)
-    unique_chars = len(set(answer.replace(' ', '').replace('\n', '').replace('•', '').replace('*', '')))
-    if len(answer) > 100 and unique_chars < 10:
-        return True
-    
-    # Check if answer is mostly just technical tokens repeated
-    technical_tokens = ['__getitem__', '__iter__', '__next__', '__init__', '<operator>', '<meta>']
-    technical_count = sum(answer.count(token) for token in technical_tokens)
-    if technical_count > 20:
-        return True
-    
-    # Check if answer is mostly bullet points (likely just listing from prompt)
-    if answer.count("•") > 50:
-        bullet_lines = [line for line in answer.split('\n') if '•' in line]
-        if len(bullet_lines) > len(answer.split('\n')) * 0.5:
-            return True
-    
-    # Check if answer doesn't contain natural language (for longer outputs)
-    if len(answer) > 200:
-        natural_words = ['the', 'is', 'are', 'this', 'that', 'code', 'method', 'function', 
-                         'file', 'does', 'performs', 'handles', 'component', 'system', 'uses',
-                         'contains', 'provides', 'implements', 'creates', 'returns']
-        has_natural_language = any(word in answer.lower() for word in natural_words)
-        if not has_natural_language:
-            return True
-    
-    return False
-
-
 def generate_answer(
     prompt: str,
     model_name: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
@@ -699,9 +650,6 @@ def generate_answer(
                     break
             answer = re.sub(r'(.)\1{3,}', '', answer)
         
-        # Final check: if answer is still garbage after filtering, reject it
-        if answer and is_garbage_output(answer):
-            answer = "Unable to generate a clear answer. The model may need more context or the question may be too complex."
         
         # Final check: if answer is mostly repetitive characters, reject it
         if answer:

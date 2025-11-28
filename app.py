@@ -164,7 +164,8 @@ with tab1:
                 python_cmd = get_python_cmd()
                 
                 if is_github:
-                    cmd = f'{python_cmd} scripts/build_cpg.py "{normalized_url}" --output "{cpg_path}"'
+                    # Use --keep-clone to preserve source code for extraction
+                    cmd = f'{python_cmd} scripts/build_cpg.py "{normalized_url}" --output "{cpg_path}" --keep-clone'
                 else:
                     cmd = f'{python_cmd} scripts/build_cpg.py "{repo_input}" --output "{cpg_path}"'
                 

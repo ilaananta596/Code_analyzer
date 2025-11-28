@@ -272,73 +272,66 @@ with tab2:
                     f'--embedding-model "{embedding_model}"'
                 )
                 
-                # Create a placeholder for progress output
-                progress_placeholder = st.empty()
-                output_lines = []
-                
-                # Stream output in real-time
-                try:
-                    process = subprocess.Popen(
-                        cmd,
-                        shell=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        bufsize=1,
-                        universal_newlines=True
-                    )
-                    
-                    # Read output line by line
-                    for line in process.stdout:
-                        output_lines.append(line)
-                        # Update progress display
-                        progress_text = "".join(output_lines[-20:])  # Show last 20 lines
-                        with progress_placeholder.container():
-                            st.code(progress_text, language="text")
-                    
-                    process.wait()
-                    output = "".join(output_lines)
-                    
-                    if process.returncode == 0:
-                        # Extract answer from output
+                # Show spinner while processing (progress goes to terminal)
+                with st.spinner("Generating answer... (check your terminal for progress)"):
+                    try:
+                        # Run command - output goes to terminal via Popen, then capture for answer
+                        process = subprocess.Popen(
+                            cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            bufsize=1,
+                            universal_newlines=True
+                        )
                         
-                        # Try to find the answer section
-                        if "ANSWER" in output:
-                            answer_start = output.find("ANSWER")
-                            answer_section = output[answer_start:]
-                            # Remove the header
-                            lines = answer_section.split('\n')
-                            answer_lines = []
-                            in_answer = False
-                            for line in lines:
-                                if "=" * 80 in line and in_answer:
-                                    break
-                                if in_answer and line.strip():
-                                    answer_lines.append(line)
-                                if "=" * 80 in line and "ANSWER" in output[output.find("ANSWER"):output.find("ANSWER")+200]:
-                                    in_answer = True
+                        # Stream to terminal and collect for answer extraction
+                        output_lines = []
+                        for line in process.stdout:
+                            # Print to terminal (where Streamlit is running)
+                            print(line, end='', flush=True)
+                            output_lines.append(line)
+                        
+                        process.wait()
+                        output = "".join(output_lines)
+                        
+                        if process.returncode == 0:
+                            # Extract answer from output
+                            if "ANSWER" in output:
+                                answer_start = output.find("ANSWER")
+                                answer_section = output[answer_start:]
+                                # Remove the header
+                                lines = answer_section.split('\n')
+                                answer_lines = []
+                                in_answer = False
+                                for line in lines:
+                                    if "=" * 80 in line and in_answer:
+                                        break
+                                    if in_answer and line.strip():
+                                        answer_lines.append(line)
+                                    if "=" * 80 in line and "ANSWER" in output[output.find("ANSWER"):output.find("ANSWER")+200]:
+                                        in_answer = True
+                                
+                                answer = '\n'.join(answer_lines).strip()
+                                if not answer:
+                                    answer = output.split("ANSWER")[-1].strip() if "ANSWER" in output else output
+                            else:
+                                answer = output
                             
-                            answer = '\n'.join(answer_lines).strip()
-                            if not answer:
-                                answer = output.split("ANSWER")[-1].strip() if "ANSWER" in output else output
+                            st.markdown("### Answer")
+                            st.markdown(answer)
+                            
+                            # Show full output in expander (optional)
+                            with st.expander("📋 Full Output"):
+                                st.text(output)
                         else:
-                            answer = output
-                        
-                        st.markdown("### Answer")
-                        st.markdown(answer)
-                        
-                        # Show full output in expander
-                        with st.expander("📋 Full Output"):
-                            st.text(output)
-                    else:
-                        st.error(f"Query failed with return code {process.returncode}")
-                        st.code(output, language="text")
-                except subprocess.TimeoutExpired:
-                    if 'process' in locals():
-                        process.kill()
-                    st.error("Query timed out after 10 minutes")
-                except Exception as e:
-                    st.error(f"Error running query: {str(e)}")
+                            st.error(f"Query failed with return code {process.returncode}")
+                            st.code(output, language="text")
+                    except subprocess.TimeoutExpired:
+                        st.error("Query timed out after 10 minutes")
+                    except Exception as e:
+                        st.error(f"Error running query: {str(e)}")
 
 # Footer
 st.markdown("---")

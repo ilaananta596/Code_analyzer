@@ -260,30 +260,47 @@ with tab2:
             if not query:
                 st.error("Please enter a question")
             else:
-                with st.spinner("Generating answer..."):
-                    python_cmd = get_python_cmd()
-                    cmd = (
-                        f'{python_cmd} scripts/query.py '
-                        f'--question "{query}" '
-                        f'--project-name "{st.session_state.project_name}" '
-                        f'--cpg-path "{st.session_state.cpg_path}" '
-                        f'--device {device} '
-                        f'--top-k {top_k} '
-                        f'--llm-model "{llm_model}" '
-                        f'--embedding-model "{embedding_model}"'
-                    )
-                    
-                    result = subprocess.run(
+                python_cmd = get_python_cmd()
+                cmd = (
+                    f'{python_cmd} scripts/query.py '
+                    f'--question "{query}" '
+                    f'--project-name "{st.session_state.project_name}" '
+                    f'--cpg-path "{st.session_state.cpg_path}" '
+                    f'--device {device} '
+                    f'--top-k {top_k} '
+                    f'--llm-model "{llm_model}" '
+                    f'--embedding-model "{embedding_model}"'
+                )
+                
+                # Create a placeholder for progress output
+                progress_placeholder = st.empty()
+                output_lines = []
+                
+                # Stream output in real-time
+                try:
+                    process = subprocess.Popen(
                         cmd,
                         shell=True,
-                        capture_output=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
                         text=True,
-                        timeout=600
+                        bufsize=1,
+                        universal_newlines=True
                     )
                     
-                    if result.returncode == 0:
+                    # Read output line by line
+                    for line in process.stdout:
+                        output_lines.append(line)
+                        # Update progress display
+                        progress_text = "".join(output_lines[-20:])  # Show last 20 lines
+                        with progress_placeholder.container():
+                            st.code(progress_text, language="text")
+                    
+                    process.wait()
+                    output = "".join(output_lines)
+                    
+                    if process.returncode == 0:
                         # Extract answer from output
-                        output = result.stdout
                         
                         # Try to find the answer section
                         if "ANSWER" in output:

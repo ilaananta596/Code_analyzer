@@ -432,6 +432,7 @@ def generate_answer(
         
         # Generate
         print("Generating answer...")
+        sys.stdout.flush()
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
@@ -759,6 +760,7 @@ def main():
     # Step 1: Semantic retrieval
     print("Step 1: Semantic retrieval from ChromaDB...")
     print(f"  Using device: {embedding_device} for embeddings")
+    sys.stdout.flush()
     embedding_model = SentenceTransformer(embedding_model_name, device=embedding_device)
     
     methods = retrieve_methods(
@@ -782,9 +784,11 @@ def main():
     graph_data = []
     if args.cpg_path:
         print(f"\nStep 2: Graph expansion via Joern...")
+        sys.stdout.flush()
         cpg_path = Path(args.cpg_path)
         if not cpg_path.exists():
             print(f"Warning: CPG file '{args.cpg_path}' not found. Skipping graph expansion.")
+            sys.stdout.flush()
         else:
             for method in methods:
                 metadata = method.get("metadata", {})
@@ -795,6 +799,7 @@ def main():
                 graph_data.append(graph)
             
             print(f"✓ Retrieved graph data for {len(graph_data)} methods")
+            sys.stdout.flush()
     else:
         print("\nStep 2: Skipped (no CPG path provided)")
         graph_data = [{}] * len(methods)
@@ -802,6 +807,7 @@ def main():
     # Step 3: Build prompt and generate answer
     if not args.no_llm:
         print(f"\nStep 3: Generating answer with LLM '{llm_model_name}'...")
+        sys.stdout.flush()
         prompt = build_prompt(args.question, methods, graph_data)
         
         # Dump prompt to file if requested

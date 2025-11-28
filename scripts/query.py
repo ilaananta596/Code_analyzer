@@ -422,6 +422,7 @@ Rules:
 - Only mention files that appear in the "File:" lines above
 - Write a direct answer without phrases like "the provided code shows" or "based on the code above"
 - If information is missing, say so clearly
+- The user does NOT see the code snippets or context - they only see your answer
 
 Answer:
 """)
@@ -529,52 +530,29 @@ def generate_answer(
         if device == "cuda":
             inputs = {k: v.to(device) for k, v in inputs.items()}
         
-        # Generate with retry logic for garbage detection
-        max_retries = 2
-        answer = None
+        # Generate
+        print("Generating answer...")
+        sys.stdout.flush()
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=max_length,
+                temperature=temperature,
+                do_sample=temperature > 0,
+                top_p=0.95,
+                repetition_penalty=1.1,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id
+            )
         
-        for attempt in range(max_retries + 1):
-            if attempt > 0:
-                print(f"Retrying generation (attempt {attempt + 1}/{max_retries + 1})...")
-                sys.stdout.flush()
-                # Slightly adjust parameters on retry
-                retry_temperature = max(0.1, temperature * 0.8)
-                retry_repetition_penalty = 1.2  # Increase repetition penalty
-            else:
-                retry_temperature = temperature
-                retry_repetition_penalty = 1.1
-            
-            print("Generating answer..." if attempt == 0 else f"Generating answer (retry {attempt + 1})...")
-            sys.stdout.flush()
-            
-            with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=max_length,
-                    temperature=retry_temperature,
-                    do_sample=retry_temperature > 0,
-                    top_p=0.95,
-                    repetition_penalty=retry_repetition_penalty,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                    no_repeat_ngram_size=3  # Prevent 3-gram repetition
-                )
-            
-            # Decode - only decode the newly generated tokens (not the input)
-            input_length = inputs['input_ids'].shape[1]
-            generated_tokens = outputs[0][input_length:]
-            answer = tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            
-            # Quick check: if answer is clearly garbage, retry immediately
-            if attempt < max_retries and is_garbage_output(answer):
-                continue
-            
-            # Clean up common artifacts and formatting
-            answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
-            answer = answer.replace("[/INST]", "").replace("<|assistant|>", "").strip()
-            
-            # If we got here, answer passed garbage check - break out of retry loop
-            break
+        # Decode - only decode the newly generated tokens (not the input)
+        input_length = inputs['input_ids'].shape[1]
+        generated_tokens = outputs[0][input_length:]
+        answer = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        
+        # Clean up common artifacts and formatting
+        answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
+        answer = answer.replace("[/INST]", "").replace("<|assistant|>", "").strip()
         
         # Remove any remaining prompt artifacts
         if "YOUR ANSWER" in answer:

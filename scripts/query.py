@@ -773,9 +773,11 @@ def main():
     
     if not methods:
         print("Error: No methods retrieved. Please check project name and ensure indexing is complete.")
+        sys.stdout.flush()
         sys.exit(1)
     
     print(f"✓ Retrieved {len(methods)} methods")
+    sys.stdout.flush()
     for i, method in enumerate(methods, 1):
         metadata = method.get("metadata", {})
         print(f"  {i}. {metadata.get('method_name', 'unknown')} ({metadata.get('file_path', 'unknown')})")
@@ -802,6 +804,7 @@ def main():
             sys.stdout.flush()
     else:
         print("\nStep 2: Skipped (no CPG path provided)")
+        sys.stdout.flush()
         graph_data = [{}] * len(methods)
     
     # Step 3: Build prompt and generate answer
@@ -817,6 +820,7 @@ def main():
             with open(prompt_path, 'w', encoding='utf-8') as f:
                 f.write(prompt)
             print(f"✓ Prompt saved to '{prompt_path}'")
+            sys.stdout.flush()
         
         answer = generate_answer(
             prompt,
@@ -830,6 +834,7 @@ def main():
         print("ANSWER")
         print("=" * 80)
         print(answer)
+        sys.stdout.flush()
     else:
         print("\nStep 3: Skipped (--no-llm flag)")
         print("\nRetrieved methods and graph data:")

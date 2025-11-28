@@ -432,23 +432,14 @@ Answer:
 def is_garbage_output(answer: str) -> bool:
     """
     Detect if the model output is garbage (hallucinations, repetitive patterns, etc.)
+    Generic detection that works for any query type.
     """
     if not answer or len(answer.strip()) < 20:
         return True
     
-    # Quick check: if it's a question instead of an answer
-    question_indicators = ["Created Question", "**Created Question**", "Question:", "**Question**"]
-    if any(indicator in answer for indicator in question_indicators):
-        return True
-    
-    # Check if answer starts with a question word and ends with ?
-    if answer.strip().startswith(("What ", "How ", "Why ", "When ", "Where ", "Who ", "Which ")) and answer.strip().endswith("?"):
-        return True
-    
-    # Check for excessive repetition of the same word/token (like __getitem__ repeated)
+    # Check for excessive repetition of the same word/token
     words = answer.split()
     if len(words) > 10:
-        # Count occurrences of each word
         word_counts = {}
         for word in words:
             word_counts[word] = word_counts.get(word, 0) + 1
@@ -458,32 +449,31 @@ def is_garbage_output(answer: str) -> bool:
         if max_count > len(words) * 0.3:
             return True
     
-    # Check for patterns like "Calls (X): • method1 • method2 • method3..." repeated
-    # This indicates the model is just outputting the prompt structure
-    if answer.count("Calls (") > 3 or answer.count("•") > 50:
-        # If it's mostly bullet points with method names, it's likely garbage
-        bullet_lines = [line for line in answer.split('\n') if '•' in line]
-        if len(bullet_lines) > len(answer.split('\n')) * 0.5:
-            return True
-    
     # Check for very low character diversity (repetitive characters)
-    unique_chars = len(set(answer.replace(' ', '').replace('\n', '').replace('•', '')))
+    unique_chars = len(set(answer.replace(' ', '').replace('\n', '').replace('•', '').replace('*', '')))
     if len(answer) > 100 and unique_chars < 10:
         return True
     
-    # Check if answer is mostly just method names or technical tokens
-    # (like __getitem__, __iter__, etc. repeated)
-    technical_tokens = ['__getitem__', '__iter__', '__next__', '__init__', '<operator>']
+    # Check if answer is mostly just technical tokens repeated
+    technical_tokens = ['__getitem__', '__iter__', '__next__', '__init__', '<operator>', '<meta>']
     technical_count = sum(answer.count(token) for token in technical_tokens)
     if technical_count > 20:
         return True
     
-    # Check if answer doesn't contain natural language words
-    natural_words = ['the', 'is', 'are', 'this', 'that', 'code', 'method', 'function', 
-                     'file', 'does', 'performs', 'handles', 'component', 'system']
-    has_natural_language = any(word in answer.lower() for word in natural_words)
-    if len(answer) > 200 and not has_natural_language:
-        return True
+    # Check if answer is mostly bullet points (likely just listing from prompt)
+    if answer.count("•") > 50:
+        bullet_lines = [line for line in answer.split('\n') if '•' in line]
+        if len(bullet_lines) > len(answer.split('\n')) * 0.5:
+            return True
+    
+    # Check if answer doesn't contain natural language (for longer outputs)
+    if len(answer) > 200:
+        natural_words = ['the', 'is', 'are', 'this', 'that', 'code', 'method', 'function', 
+                         'file', 'does', 'performs', 'handles', 'component', 'system', 'uses',
+                         'contains', 'provides', 'implements', 'creates', 'returns']
+        has_natural_language = any(word in answer.lower() for word in natural_words)
+        if not has_natural_language:
+            return True
     
     return False
 
@@ -585,26 +575,15 @@ def generate_answer(
         answer = answer.replace("<|endoftext|>", "").replace("</s>", "").strip()
         answer = answer.replace("[/INST]", "").replace("<|assistant|>", "").strip()
         
-        # Quick fix: Detect if model generated a question instead of answer
-        question_indicators = ["Created Question", "**Created Question**", "Question:", "**Question**"]
-        if any(indicator in answer for indicator in question_indicators):
-            # This is garbage - model generated a question, retry
-            if attempt < max_retries:
-                continue
+        # Check if output is garbage - if so, retry immediately
+        if attempt < max_retries and is_garbage_output(answer):
+            continue
         
         # Remove any remaining prompt artifacts
         if "YOUR ANSWER" in answer:
             answer = answer.split("YOUR ANSWER")[-1].strip()
         if "Your answer:" in answer:
             answer = answer.split("Your answer:")[-1].strip()
-        
-        # Remove question-like patterns at the start
-        if answer.startswith(("What ", "How ", "Why ", "When ", "Where ", "Who ", "Which ")):
-            # Check if it's actually a question (ends with ?)
-            if answer.strip().endswith("?"):
-                # This looks like a question, not an answer - retry
-                if attempt < max_retries:
-                    continue
         
         # Remove prompt instruction fragments that might leak into the answer
         instruction_phrases = [

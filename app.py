@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 import json
 import time
+import shutil
 
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent / "scripts"))
@@ -32,6 +33,75 @@ if 'project_name' not in st.session_state:
     st.session_state.project_name = None
 if 'cpg_path' not in st.session_state:
     st.session_state.cpg_path = None
+if 'cleanup_done' not in st.session_state:
+    st.session_state.cleanup_done = False
+
+def cleanup_project_files(project_name=None):
+    """Clean up CPG files and cloned repositories"""
+    cleaned = []
+    
+    # Clean up CPG files
+    cpg_dir = Path("data/cpg")
+    if cpg_dir.exists():
+        if project_name:
+            # Clean specific project
+            cpg_file = cpg_dir / f"{project_name}.cpg.bin"
+            source_info_file = cpg_dir / f"{project_name}.source_info.json"
+            if cpg_file.exists():
+                cpg_file.unlink()
+                cleaned.append(f"CPG: {cpg_file}")
+            if source_info_file.exists():
+                # Read source info to clean up cloned repo
+                try:
+                    with open(source_info_file, 'r') as f:
+                        source_info = json.load(f)
+                    clone_dir = source_info.get("source_dir")
+                    if clone_dir and Path(clone_dir).exists():
+                        # Only clean if it's marked for cleanup or is a temp directory
+                        if source_info.get("cleanup", False) or "graphrag_clone_" in clone_dir:
+                            shutil.rmtree(clone_dir)
+                            cleaned.append(f"Cloned repo: {clone_dir}")
+                except Exception as e:
+                    pass
+                source_info_file.unlink()
+                cleaned.append(f"Source info: {source_info_file}")
+        else:
+            # Clean all CPG files
+            for cpg_file in cpg_dir.glob("*.cpg.bin"):
+                project = cpg_file.stem
+                cpg_file.unlink()
+                cleaned.append(f"CPG: {cpg_file}")
+                
+                # Clean corresponding source_info.json and cloned repo
+                source_info_file = cpg_dir / f"{project}.source_info.json"
+                if source_info_file.exists():
+                    try:
+                        with open(source_info_file, 'r') as f:
+                            source_info = json.load(f)
+                        clone_dir = source_info.get("source_dir")
+                        if clone_dir and Path(clone_dir).exists():
+                            if source_info.get("cleanup", False) or "graphrag_clone_" in clone_dir:
+                                shutil.rmtree(clone_dir)
+                                cleaned.append(f"Cloned repo: {clone_dir}")
+                    except Exception as e:
+                        pass
+                    source_info_file.unlink()
+                    cleaned.append(f"Source info: {source_info_file}")
+    
+    # Clean up methods JSON files
+    methods_dir = Path("data")
+    if methods_dir.exists():
+        if project_name:
+            methods_file = methods_dir / f"methods_{project_name}.json"
+            if methods_file.exists():
+                methods_file.unlink()
+                cleaned.append(f"Methods JSON: {methods_file}")
+        else:
+            for methods_file in methods_dir.glob("methods_*.json"):
+                methods_file.unlink()
+                cleaned.append(f"Methods JSON: {methods_file}")
+    
+    return cleaned
 
 def get_python_cmd():
     """Get the correct Python command (prefer conda environment)"""
@@ -221,11 +291,19 @@ with tab1:
     
     with col4:
         if st.button("🔄 Reset", use_container_width=True):
+            # Clean up files before resetting
+            project_name = st.session_state.project_name
+            cleaned = cleanup_project_files(project_name)
+            
+            # Reset session state
             st.session_state.cpg_built = False
             st.session_state.methods_extracted = False
             st.session_state.methods_indexed = False
             st.session_state.project_name = None
             st.session_state.cpg_path = None
+            
+            if cleaned:
+                st.info(f"✓ Cleaned up {len(cleaned)} files/directories")
             st.rerun()
     
     # Status display

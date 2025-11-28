@@ -394,20 +394,15 @@ def build_prompt(
         
         callers = graph.get("callers", [])
         if callers:
-            prompt_parts.append(f"\n✓ CALLED BY ({len(callers)}):")
-            for caller in callers[:15]:  # Show more callers
-                prompt_parts.append(f"  • {caller}")
+            prompt_parts.append(f"Called by: {', '.join(callers[:10])}")
+            for caller in callers[:10]:
                 all_callers.append((method_name, caller))
-        else:
-            prompt_parts.append("\nCalled by: None found")
         
         callees = graph.get("callees", [])
         if callees:
             filtered_callees = [c for c in callees if not c.startswith("<operator")]
             if filtered_callees:
-                prompt_parts.append(f"\nCalls ({len(filtered_callees)}):")
-                for callee in filtered_callees[:10]:
-                    prompt_parts.append(f"  • {callee}")
+                prompt_parts.append(f"Calls: {', '.join(filtered_callees[:10])}")
     
     # Simple, clear instructions
     prompt_parts.append("\n" + "=" * 80)

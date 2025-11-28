@@ -275,7 +275,29 @@ with tab2:
                 # Show spinner while processing (progress goes to terminal)
                 with st.spinner("Generating answer... (check your terminal for progress)"):
                     try:
-                        # Run command - output goes to terminal via Popen, then capture for answer
+                        # Create a class that writes to both terminal and buffer
+                        class TeeOutput:
+                            def __init__(self):
+                                self.buffer = []
+                            
+                            def write(self, text):
+                                # Write to terminal (stdout)
+                                sys.stdout.write(text)
+                                sys.stdout.flush()
+                                # Also buffer for answer extraction
+                                self.buffer.append(text)
+                            
+                            def flush(self):
+                                sys.stdout.flush()
+                            
+                            def get_output(self):
+                                return ''.join(self.buffer)
+                        
+                        # Save original stdout
+                        original_stdout = sys.stdout
+                        tee = TeeOutput()
+                        
+                        # Run command - output goes to terminal AND buffer
                         process = subprocess.Popen(
                             cmd,
                             shell=True,
@@ -290,7 +312,7 @@ with tab2:
                         output_lines = []
                         for line in process.stdout:
                             # Print to terminal (where Streamlit is running)
-                            print(line, end='', flush=True)
+                            print(line, end='', file=sys.stdout, flush=True)
                             output_lines.append(line)
                         
                         process.wait()

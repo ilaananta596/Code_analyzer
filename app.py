@@ -103,6 +103,24 @@ def cleanup_project_files(project_name=None):
     
     return cleaned
 
+# Clean up on app refresh/reset (when session state is empty)
+if not st.session_state.get('project_name') and not st.session_state.get('cleanup_done'):
+    # On first load or after reset, clean up any orphaned temp clone directories
+    cpg_dir = Path("data/cpg")
+    if cpg_dir.exists():
+        for source_info_file in cpg_dir.glob("*.source_info.json"):
+            try:
+                with open(source_info_file, 'r') as f:
+                    source_info = json.load(f)
+                clone_dir = source_info.get("source_dir")
+                # Only clean temp directories (graphrag_clone_ prefix)
+                if clone_dir and Path(clone_dir).exists() and "graphrag_clone_" in clone_dir:
+                    if source_info.get("cleanup", True):  # Default to cleanup for temp dirs
+                        shutil.rmtree(clone_dir)
+            except Exception:
+                pass
+    st.session_state.cleanup_done = True
+
 def get_python_cmd():
     """Get the correct Python command (prefer conda environment)"""
     # Try to find conda environment

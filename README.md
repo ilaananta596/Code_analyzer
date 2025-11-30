@@ -1,6 +1,6 @@
 # GraphRAG Code Analysis System
 
-A GraphRAG-style code analysis system that combines semantic retrieval, graph analysis, and LLM reasoning to answer questions about codebases.
+A GraphRAG-style code analysis system that combines semantic retrieval, graph analysis, and LLM reasoning to answer questions about codebases. Includes fault detection, sensitive data tracking, and code understanding features.
 
 A code analysis system that combines semantic search (ChromaDB), graph analysis (Joern), and open-source LLMs to answer questions about large codebases.
 
@@ -91,17 +91,16 @@ python scripts/extract_methods.py data/cpg/project.cpg.bin --output data/methods
 - `--source-dir`: Source directory to extract actual code from (auto-detected from .source_info.json if available)
 - `--no-enhance`: Skip enhancing with source code even if source directory is available
 
-3. **Index methods in ChromaDB:**
+3. **Index methods in ChromaDB (for query feature):**
 ```bash
 python scripts/index_methods.py data/methods.json --project-name project
-
-# With custom embedding model
-python scripts/index_methods.py data/methods.json --project-name project --embedding-model microsoft/graphcodebert-base
 ```
 
-### Phase 2: Query
+**Note:** For analysis features (fault detection, sensitive data tracking, code understanding), CPG JSON is automatically extracted when you build CPG. The files are saved to `cpg_rag_system/data/cpg_nodes.json` and `cpg_rag_system/data/cpg_edges.json`.
 
-**Basic query:**
+### Phase 2: Query or Analysis
+
+**Query (Original Feature):**
 ```bash
 python scripts/query.py \
   --question "Where is the model training happening?" \
@@ -109,16 +108,30 @@ python scripts/query.py \
   --cpg-path data/cpg/project.cpg.bin
 ```
 
-**Full-featured query with all options:**
+**Fault Detection:**
 ```bash
-python scripts/query.py \
-  --question "Who calls the validation logic?" \
-  --project-name project \
-  --cpg-path data/cpg/project.cpg.bin \
-  --device cuda \
-  --top-k 5 \
-  --llm-model Qwen/Qwen2.5-Coder-7B-Instruct \
-  --dump-prompt prompts/query_prompt.txt
+python scripts/run_fault_detection.py \
+  --nodes-json cpg_rag_system/data/cpg_nodes.json \
+  --all \
+  --format console
+```
+
+**Sensitive Data Tracking:**
+```bash
+python scripts/run_sensitive_data_tracking.py \
+  --nodes-json cpg_rag_system/data/cpg_nodes.json \
+  --edges-json cpg_rag_system/data/cpg_edges.json \
+  --all \
+  --format console
+```
+
+**Code Understanding:**
+```bash
+python scripts/run_code_understanding.py \
+  --nodes-json cpg_rag_system/data/cpg_nodes.json \
+  --edges-json cpg_rag_system/data/cpg_edges.json \
+  --overview \
+  --format console
 ```
 
 **Query arguments:**
@@ -171,6 +184,9 @@ Edit `models/config.yaml` to customize:
 ✅ **Self-contained answers**: Answers don't reference prompt structure  
 ✅ **Flexible LLM choice**: Use any Hugging Face model  
 ✅ **GPU support**: Automatic GPU detection and fallback to CPU  
+✅ **Fault Detection**: Identifies security vulnerabilities, missing error handling, and code quality issues  
+✅ **Sensitive Data Tracking**: Tracks flow of sensitive data (passwords, API keys, PII)  
+✅ **Code Understanding**: Generates high-level codebase structure, architecture, and entry points  
 
 ## Model Recommendations
 
@@ -217,14 +233,20 @@ The system includes a Streamlit web interface for easy interaction:
 
 1. **Setup Tab:**
    - Enter a GitHub repository URL or local path
-   - Click "Build CPG" to generate the Code Property Graph
-   - Click "Extract Methods" to extract methods from the CPG
-   - Click "Index Methods" to index methods in ChromaDB
+   - Click "Build CPG" to generate the Code Property Graph (automatically extracts CPG JSON for analysis features)
+   - Click "Extract Methods" to extract methods from the CPG (for query feature)
+   - Click "Index Methods" to index methods in ChromaDB (for query feature)
 
-2. **Query Tab:**
+2. **Query Tab (Original Feature):**
    - Enter your question about the codebase
    - Click "Generate Answer" to get the analysis
    - View the answer and full output
+
+3. **Code Analysis Tab (New Features):**
+   - Select analysis type: Fault Detection, Sensitive Data Tracking, or Code Understanding
+   - Configure options (security-only, track type, mode)
+   - Click the respective button to run analysis
+   - View results in console, JSON, Markdown, or HTML format
 
 ### Configuration
 

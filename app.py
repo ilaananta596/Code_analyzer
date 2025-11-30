@@ -35,6 +35,8 @@ if 'cpg_path' not in st.session_state:
     st.session_state.cpg_path = None
 if 'cleanup_done' not in st.session_state:
     st.session_state.cleanup_done = False
+if 'cpg_json_extracted' not in st.session_state:
+    st.session_state.cpg_json_extracted = False
 
 def cleanup_project_files(project_name=None):
     """Clean up CPG files and cloned repositories"""
@@ -57,10 +59,10 @@ def cleanup_project_files(project_name=None):
                         source_info = json.load(f)
                     clone_dir = source_info.get("source_dir")
                     if clone_dir and Path(clone_dir).exists():
-                        # Only clean if it's marked for cleanup or is a temp directory
-                        if source_info.get("cleanup", False) or "graphrag_clone_" in clone_dir:
-                            shutil.rmtree(clone_dir)
-                            cleaned.append(f"Cloned repo: {clone_dir}")
+                        # Clean up cloned repo when explicitly resetting
+                        # Source code extraction happens immediately after CPG build, so it's safe to clean now
+                        shutil.rmtree(clone_dir)
+                        cleaned.append(f"Cloned repo: {clone_dir}")
                 except Exception as e:
                     pass
                 source_info_file.unlink()
@@ -80,9 +82,10 @@ def cleanup_project_files(project_name=None):
                             source_info = json.load(f)
                         clone_dir = source_info.get("source_dir")
                         if clone_dir and Path(clone_dir).exists():
-                            if source_info.get("cleanup", False) or "graphrag_clone_" in clone_dir:
-                                shutil.rmtree(clone_dir)
-                                cleaned.append(f"Cloned repo: {clone_dir}")
+                            # Clean up cloned repo when resetting
+                            # Source code extraction happens immediately after CPG build, so it's safe to clean now
+                            shutil.rmtree(clone_dir)
+                            cleaned.append(f"Cloned repo: {clone_dir}")
                     except Exception as e:
                         pass
                     source_info_file.unlink()
@@ -113,10 +116,12 @@ if not st.session_state.get('project_name') and not st.session_state.get('cleanu
                 with open(source_info_file, 'r') as f:
                     source_info = json.load(f)
                 clone_dir = source_info.get("source_dir")
-                # Only clean temp directories (graphrag_clone_ prefix)
+                # Clean up orphaned temp directories on app refresh
+                # These are from previous sessions where cleanup didn't happen
                 if clone_dir and Path(clone_dir).exists() and "graphrag_clone_" in clone_dir:
-                    if source_info.get("cleanup", True):  # Default to cleanup for temp dirs
-                        shutil.rmtree(clone_dir)
+                    # Clean up orphaned temp directories (from previous sessions)
+                    # Active sessions will have their repos cleaned on explicit reset
+                    shutil.rmtree(clone_dir)
             except Exception:
                 pass
     st.session_state.cleanup_done = True
@@ -219,7 +224,7 @@ with st.sidebar:
     )
 
 # Main content area
-tab1, tab2 = st.tabs(["📥 Setup", "❓ Query"])
+tab1, tab2, tab3 = st.tabs(["📥 Setup", "❓ Query", "🔍 Analysis"])
 
 with tab1:
     st.header("Repository Setup")
@@ -265,6 +270,18 @@ with tab1:
                     st.success(f"✓ CPG built successfully: {cpg_path}")
                     st.session_state.methods_extracted = False
                     st.session_state.methods_indexed = False
+                    st.session_state.cpg_json_extracted = False
+                    
+                    # Automatically extract CPG JSON after building CPG
+                    with st.spinner("Extracting CPG nodes and edges..."):
+                        python_cmd = get_python_cmd()
+                        extract_cmd = f'{python_cmd} scripts/extract_cpg_json.py "{cpg_path}" --output cpg_rag_system/data'
+                        extract_success, extract_output = run_command(extract_cmd, "Extracting CPG JSON...")
+                        if extract_success:
+                            st.session_state.cpg_json_extracted = True
+                            st.info("✓ CPG nodes and edges extracted to cpg_rag_system/data/")
+                        else:
+                            st.warning(f"CPG JSON extraction had issues:\n{extract_output}")
                 else:
                     st.error(f"Failed to build CPG:\n{output}")
     
@@ -343,6 +360,7 @@ with tab1:
 
 with tab2:
     st.header("Query Codebase")
+    st.markdown("**Original Query Feature** - Uses methods.json and ChromaDB for semantic search")
     
     if not st.session_state.methods_indexed:
         st.warning("⚠️ Please complete the setup steps first: Build CPG → Extract Methods → Index Methods")
@@ -451,6 +469,255 @@ with tab2:
                         st.error("Query timed out after 10 minutes")
                     except Exception as e:
                         st.error(f"Error running query: {str(e)}")
+
+with tab3:
+    st.header("Code Analysis")
+    st.markdown("**New Analysis Features** - Uses CPG nodes/edges JSON from `cpg_rag_system/data/`")
+    
+    # Check if CPG JSON exists
+    nodes_json = Path("cpg_rag_system/data/cpg_nodes.json")
+    edges_json = Path("cpg_rag_system/data/cpg_edges.json")
+    
+    if not nodes_json.exists():
+        st.warning("⚠️ CPG nodes JSON not found. Please build CPG first (extraction happens automatically) or extract manually:")
+        st.code("python scripts/extract_cpg_json.py data/cpg/<project>.cpg.bin")
+    else:
+        analysis_type = st.radio(
+            "Select Analysis Type",
+            ["Fault Detection", "Sensitive Data Tracking", "Code Understanding"],
+            horizontal=True
+        )
+        
+        if analysis_type == "Fault Detection":
+            st.subheader("🔍 Fault Detection")
+            st.markdown("Detects security vulnerabilities, missing error handling, resource leaks, and code quality issues.")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                security_only = st.checkbox("Security issues only", value=False)
+            
+            with col2:
+                export_format = st.selectbox(
+                    "Export Format",
+                    ["console", "json", "markdown", "html"],
+                    index=0
+                )
+            
+            if st.button("🔍 Run Fault Detection", type="primary", use_container_width=True):
+                python_cmd = get_python_cmd()
+                
+                cmd = f'{python_cmd} scripts/run_fault_detection.py --nodes-json "{nodes_json}" --format {export_format}'
+                if security_only:
+                    cmd += " --security"
+                else:
+                    cmd += " --all"
+                
+                with st.spinner("Running fault detection... (check your terminal for progress)"):
+                    try:
+                        process = subprocess.Popen(
+                            cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            bufsize=1,
+                            universal_newlines=True
+                        )
+                        
+                        output_lines = []
+                        for line in process.stdout:
+                            print(line, end='', flush=True)
+                            output_lines.append(line)
+                        
+                        process.wait()
+                        output = "".join(output_lines)
+                        
+                        if process.returncode == 0:
+                            # Try to parse JSON output if format is json
+                            if export_format == "json":
+                                try:
+                                    import json
+                                    result = json.loads(output)
+                                    st.success(f"✅ Found {result.get('total_issues', 0)} issues across {len(result.get('findings', []))} methods")
+                                    
+                                    # Group by severity
+                                    severity_counts = {}
+                                    for finding in result.get('findings', []):
+                                        severity = finding.get('severity', 'UNKNOWN')
+                                        severity_counts[severity] = severity_counts.get(severity, 0) + len(finding.get('issues', []))
+                                    
+                                    if severity_counts:
+                                        st.markdown("### Issues by Severity")
+                                        for severity, count in sorted(severity_counts.items(), reverse=True):
+                                            st.metric(severity.replace("Severity.", ""), count)
+                                    
+                                    with st.expander("📋 View Full Report (JSON)"):
+                                        st.json(result)
+                                except json.JSONDecodeError:
+                                    st.text(output)
+                            else:
+                                st.markdown("### Analysis Results")
+                                st.text(output)
+                                
+                                with st.expander("📋 Full Output"):
+                                    st.text(output)
+                        else:
+                            st.error(f"Fault detection failed with return code {process.returncode}")
+                            st.code(output, language="text")
+                    except Exception as e:
+                        st.error(f"Error running fault detection: {str(e)}")
+        
+        elif analysis_type == "Sensitive Data Tracking":
+            st.subheader("🔐 Sensitive Data Tracking")
+            st.markdown("Tracks sensitive data flows (passwords, API keys, tokens, PII) through the codebase.")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                track_type = st.text_input(
+                    "Track Specific Type (optional)",
+                    placeholder="e.g., password, api_key, token",
+                    help="Leave empty to track all sensitive data"
+                )
+            
+            with col2:
+                export_format = st.selectbox(
+                    "Export Format",
+                    ["console", "json", "markdown", "html"],
+                    index=0
+                )
+            
+            if st.button("🔐 Run Sensitive Data Tracking", type="primary", use_container_width=True):
+                python_cmd = get_python_cmd()
+                
+                cmd = f'{python_cmd} scripts/run_sensitive_data_tracking.py --nodes-json "{nodes_json}" --edges-json "{edges_json}" --format {export_format}'
+                if track_type:
+                    cmd += f' --track {track_type}'
+                else:
+                    cmd += " --all"
+                
+                with st.spinner("Running sensitive data tracking... (check your terminal for progress)"):
+                    try:
+                        process = subprocess.Popen(
+                            cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            bufsize=1,
+                            universal_newlines=True
+                        )
+                        
+                        output_lines = []
+                        for line in process.stdout:
+                            print(line, end='', flush=True)
+                            output_lines.append(line)
+                        
+                        process.wait()
+                        output = "".join(output_lines)
+                        
+                        if process.returncode == 0:
+                            # Try to parse JSON output if format is json
+                            if export_format == "json":
+                                try:
+                                    import json
+                                    result = json.loads(output)
+                                    summary = result.get('summary', {})
+                                    st.success(
+                                        f"✅ Analyzed {summary.get('total_functions', 0)} functions. "
+                                        f"Found {summary.get('functions_with_sensitive_data', 0)} with sensitive data. "
+                                        f"{summary.get('total_violations', 0)} violations detected."
+                                    )
+                                    
+                                    if summary.get('total_violations', 0) > 0:
+                                        st.warning("⚠️ Violations found! Review the report below.")
+                                    
+                                    with st.expander("📋 View Full Report (JSON)"):
+                                        st.json(result)
+                                except json.JSONDecodeError:
+                                    st.text(output)
+                            else:
+                                st.markdown("### Analysis Results")
+                                st.text(output)
+                                
+                                with st.expander("📋 Full Output"):
+                                    st.text(output)
+                        else:
+                            st.error(f"Sensitive data tracking failed with return code {process.returncode}")
+                            st.code(output, language="text")
+                    except Exception as e:
+                        st.error(f"Error running sensitive data tracking: {str(e)}")
+        
+        elif analysis_type == "Code Understanding":
+            st.subheader("📚 Code Understanding")
+            st.markdown("Generates comprehensive overview of codebase structure, architecture, and entry points.")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                understand_mode = st.radio(
+                    "Understanding Mode",
+                    ["Overview", "Architecture", "Entry Points"],
+                    horizontal=False
+                )
+            
+            with col2:
+                export_format = st.selectbox(
+                    "Export Format",
+                    ["console", "markdown"],
+                    index=0
+                )
+            
+            if st.button("📚 Generate Understanding", type="primary", use_container_width=True):
+                python_cmd = get_python_cmd()
+                
+                cmd = f'{python_cmd} scripts/run_code_understanding.py --nodes-json "{nodes_json}" --edges-json "{edges_json}" --format {export_format}'
+                
+                if understand_mode == "Architecture":
+                    cmd += " --architecture"
+                elif understand_mode == "Entry Points":
+                    cmd += " --entry-points"
+                else:
+                    cmd += " --overview"
+                
+                with st.spinner("Generating code understanding... (check your terminal for progress)"):
+                    try:
+                        process = subprocess.Popen(
+                            cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            bufsize=1,
+                            universal_newlines=True
+                        )
+                        
+                        output_lines = []
+                        for line in process.stdout:
+                            print(line, end='', flush=True)
+                            output_lines.append(line)
+                        
+                        process.wait()
+                        output = "".join(output_lines)
+                        
+                        if process.returncode == 0:
+                            st.markdown("### Analysis Results")
+                            
+                            # If markdown format, render as markdown
+                            if export_format == "markdown":
+                                st.markdown(output)
+                            else:
+                                # For console output, show as text
+                                st.text(output)
+                            
+                            with st.expander("📋 Full Output"):
+                                st.text(output)
+                        else:
+                            st.error(f"Code understanding failed with return code {process.returncode}")
+                            st.code(output, language="text")
+                    except Exception as e:
+                        st.error(f"Error running code understanding: {str(e)}")
 
 # Footer
 st.markdown("---")

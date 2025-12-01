@@ -6,6 +6,7 @@ Embed method representations and index them in ChromaDB.
 import argparse
 import json
 import sys
+import warnings
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -57,9 +58,25 @@ def embed_and_index(
         return False
     
     print(f"Loading embedding model '{embedding_model_name}'...")
+    print("Note: Warnings about model weights initialization are expected and can be ignored.")
     try:
-        model = SentenceTransformer(embedding_model_name)
-        print("✓ Model loaded")
+        # Suppress warnings about model weights initialization when using non-sentence-transformers models
+        # These warnings are expected when using HuggingFace models with sentence-transformers
+        import os
+        import logging
+        
+        # Suppress transformers warnings
+        os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+        logging.getLogger("transformers").setLevel(logging.ERROR)
+        logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+        
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            warnings.filterwarnings("ignore", message=".*Some weights of.*were not initialized.*")
+            warnings.filterwarnings("ignore", message=".*Creating a new one with mean pooling.*")
+            warnings.filterwarnings("ignore", message=".*No sentence-transformers model found.*")
+            model = SentenceTransformer(embedding_model_name)
+        print("✓ Model loaded successfully")
     except Exception as e:
         print(f"Error loading embedding model: {e}")
         return False
@@ -213,17 +230,35 @@ def embed_and_index(
         print(f"Error creating collection: {e}")
         return False
     
-    # Add to ChromaDB
+    # Add to ChromaDB in batches (ChromaDB has a max batch size limit)
     print("Indexing methods in ChromaDB...")
     try:
-        ids = [f"{project_name}_{i}" for i in range(len(methods))]
+        # ChromaDB has a maximum batch size, so we need to split into smaller batches
+        max_batch_size = 5000  # Safe batch size (ChromaDB limit is around 5461)
+        total_methods = len(methods)
+        ids = [f"{project_name}_{i}" for i in range(total_methods)]
         
-        collection.add(
-            ids=ids,
-            embeddings=embeddings.tolist(),
-            documents=method_texts,
-            metadatas=method_metadata
-        )
+        # Split into batches
+        num_batches = (total_methods + max_batch_size - 1) // max_batch_size
+        print(f"  Adding {total_methods} methods in {num_batches} batch(es)...")
+        
+        for batch_idx in range(num_batches):
+            start_idx = batch_idx * max_batch_size
+            end_idx = min(start_idx + max_batch_size, total_methods)
+            
+            batch_ids = ids[start_idx:end_idx]
+            batch_embeddings = embeddings[start_idx:end_idx].tolist()
+            batch_documents = method_texts[start_idx:end_idx]
+            batch_metadatas = method_metadata[start_idx:end_idx]
+            
+            collection.add(
+                ids=batch_ids,
+                embeddings=batch_embeddings,
+                documents=batch_documents,
+                metadatas=batch_metadatas
+            )
+            
+            print(f"  Batch {batch_idx + 1}/{num_batches}: Added {end_idx - start_idx} methods ({end_idx}/{total_methods} total)")
         
         print(f"✓ Indexed {len(methods)} methods in ChromaDB")
         print(f"  Collection: {collection_name}")

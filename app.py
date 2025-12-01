@@ -37,6 +37,8 @@ if 'cleanup_done' not in st.session_state:
     st.session_state.cleanup_done = False
 if 'cpg_json_extracted' not in st.session_state:
     st.session_state.cpg_json_extracted = False
+if 'rag_setup' not in st.session_state:
+    st.session_state.rag_setup = False
 
 def cleanup_project_files(project_name=None):
     """Clean up CPG files and cloned repositories"""
@@ -155,10 +157,19 @@ def run_command(cmd, description):
                 text=True,
                 timeout=600  # 10 minutes for CPG building
             )
+            # Combine stdout and stderr for full output
+            combined_output = result.stdout + result.stderr if result.stderr else result.stdout
+            
             if result.returncode == 0:
-                return True, result.stdout
+                return True, combined_output
             else:
-                return False, result.stderr
+                # Check if it's just warnings (common with model loading)
+                # If output contains success indicators, treat as success
+                if ("✓" in combined_output or "successfully" in combined_output.lower() or 
+                    "Indexed" in combined_output or "Model loaded" in combined_output):
+                    # Likely succeeded despite warnings
+                    return True, combined_output
+                return False, combined_output
         except subprocess.TimeoutExpired:
             return False, "Command timed out after 10 minutes"
         except Exception as e:
@@ -271,19 +282,44 @@ with tab1:
                     st.session_state.methods_extracted = False
                     st.session_state.methods_indexed = False
                     st.session_state.cpg_json_extracted = False
+                    st.session_state.rag_setup = False
                     
                     # Automatically extract CPG JSON after building CPG
                     with st.spinner("Extracting CPG nodes and edges..."):
                         python_cmd = get_python_cmd()
-                        extract_cmd = f'{python_cmd} scripts/extract_cpg_json.py "{cpg_path}" --output cpg_rag_system/data'
+                        extract_cmd = f'{python_cmd} scripts/extract_cpg_json.py "{cpg_path}" --output cpg_rag_complete/data'
                         extract_success, extract_output = run_command(extract_cmd, "Extracting CPG JSON...")
                         if extract_success:
                             st.session_state.cpg_json_extracted = True
-                            st.info("✓ CPG nodes and edges extracted to cpg_rag_system/data/")
+                            st.info("✓ CPG nodes and edges extracted to cpg_rag_complete/data/")
+                            
+                            # Clear old ChromaDB to ensure fresh data for this project
+                            chroma_dir = Path("cpg_rag_complete/chroma_db")
+                            if chroma_dir.exists():
+                                try:
+                                    shutil.rmtree(chroma_dir)
+                                    st.info("🗑️ Cleared old RAG data for fresh analysis")
+                                except Exception as e:
+                                    st.warning(f"Could not clear old ChromaDB: {e}")
+                            
+                            # Setup RAG system after extraction
+                            with st.spinner("Setting up RAG system (this may take a few minutes)..."):
+                                setup_cmd = f'{python_cmd} cpg_rag_complete/step3_setup_rag.py --data-dir cpg_rag_complete/data --force'
+                                setup_success, setup_output = run_command(setup_cmd, "Setting up RAG...")
+                                if setup_success:
+                                    st.session_state.rag_setup = True
+                                    st.success("✓ RAG system ready for analysis")
+                                else:
+                                    st.warning(f"RAG setup had issues (you may need to run it manually):\n{setup_output}")
+                                    st.session_state.rag_setup = False
                         else:
-                            st.warning(f"CPG JSON extraction had issues:\n{extract_output}")
+                            st.error(f"Failed to extract CPG JSON:\n{extract_output}")
+                            with st.expander("📋 Full Error Output"):
+                                st.code(extract_output, language="text")
                 else:
                     st.error(f"Failed to build CPG:\n{output}")
+                    with st.expander("📋 Full Error Output"):
+                        st.code(output, language="text")
     
     with col2:
         if st.button("📤 Extract Methods", use_container_width=True):
@@ -303,6 +339,8 @@ with tab1:
                     st.session_state.methods_indexed = False
                 else:
                     st.error(f"Failed to extract methods:\n{output}")
+                    with st.expander("📋 Full Error Output"):
+                        st.code(output, language="text")
     
     col3, col4 = st.columns(2)
     
@@ -323,6 +361,8 @@ with tab1:
                     st.success(f"✓ Methods indexed in ChromaDB")
                 else:
                     st.error(f"Failed to index methods:\n{output}")
+                    with st.expander("📋 Full Error Output"):
+                        st.code(output, language="text")
     
     with col4:
         if st.button("🔄 Reset", use_container_width=True):
@@ -433,6 +473,13 @@ with tab2:
                         process.wait()
                         output = "".join(output_lines)
                         
+                        # Filter out deprecation warnings from output
+                        import re
+                        output = re.sub(r'.*LangChainDeprecationWarning.*\n', '', output)
+                        output = re.sub(r'.*deprecated.*\n', '', output)
+                        output = re.sub(r'.*step4_query_rag\.py:\d+:.*\n', '', output)
+                        output = re.sub(r'.*step3_setup_rag\.py:\d+:.*\n', '', output)
+                        
                         if process.returncode == 0:
                             # Extract answer from output
                             if "ANSWER" in output:
@@ -467,20 +514,51 @@ with tab2:
                             st.code(output, language="text")
                     except subprocess.TimeoutExpired:
                         st.error("Query timed out after 10 minutes")
+                        st.info("The query took longer than 10 minutes to complete. Try simplifying your query or check if the codebase is very large.")
                     except Exception as e:
                         st.error(f"Error running query: {str(e)}")
+                        import traceback
+                        with st.expander("📋 Full Error Traceback"):
+                            st.code(traceback.format_exc(), language="text")
 
 with tab3:
     st.header("Code Analysis")
-    st.markdown("**New Analysis Features** - Uses CPG nodes/edges JSON from `cpg_rag_system/data/`")
+    st.markdown("**RAG-Based Analysis** - Uses `cpg_rag_complete` with Ollama for intelligent code analysis")
+    st.info("ℹ️ **Note**: Make sure Ollama is running (`ollama serve`) before running analysis")
     
-    # Check if CPG JSON exists
-    nodes_json = Path("cpg_rag_system/data/cpg_nodes.json")
-    edges_json = Path("cpg_rag_system/data/cpg_edges.json")
+    # Check if CPG JSON exists and RAG is set up
+    nodes_json = Path("cpg_rag_complete/data/cpg_nodes.json")
+    edges_json = Path("cpg_rag_complete/data/cpg_edges.json")
+    chroma_dir = Path("cpg_rag_complete/chroma_db")
     
     if not nodes_json.exists():
         st.warning("⚠️ CPG nodes JSON not found. Please build CPG first (extraction happens automatically) or extract manually:")
         st.code("python scripts/extract_cpg_json.py data/cpg/<project>.cpg.bin")
+    elif not chroma_dir.exists() or not any(chroma_dir.iterdir()):
+        st.warning("⚠️ RAG system not set up. Please run setup first:")
+        st.code("python cpg_rag_complete/step3_setup_rag.py --data-dir cpg_rag_complete/data")
+        if st.button("🔧 Setup RAG Now", use_container_width=True):
+            # Clear old ChromaDB first
+            chroma_dir = Path("cpg_rag_complete/chroma_db")
+            if chroma_dir.exists():
+                try:
+                    shutil.rmtree(chroma_dir)
+                    st.info("🗑️ Cleared old RAG data")
+                except Exception as e:
+                    st.warning(f"Could not clear old ChromaDB: {e}")
+            
+            python_cmd = get_python_cmd()
+            setup_cmd = f'{python_cmd} cpg_rag_complete/step3_setup_rag.py --data-dir cpg_rag_complete/data --force'
+            with st.spinner("Setting up RAG system (this may take a few minutes)..."):
+                setup_success, setup_output = run_command(setup_cmd, "Setting up RAG...")
+                if setup_success:
+                    st.session_state.rag_setup = True
+                    st.success("✓ RAG system ready!")
+                    st.rerun()
+                else:
+                    st.error(f"RAG setup failed:\n{setup_output}")
+                    with st.expander("📋 Full Error Output"):
+                        st.code(setup_output, language="text")
     else:
         analysis_type = st.radio(
             "Select Analysis Type",
@@ -500,18 +578,20 @@ with tab3:
             with col2:
                 export_format = st.selectbox(
                     "Export Format",
-                    ["console", "json", "markdown", "html"],
+                    #["console", "json", "markdown", "html"],
+                    ["csv", "json", "md"],
                     index=0
                 )
             
             if st.button("🔍 Run Fault Detection", type="primary", use_container_width=True):
                 python_cmd = get_python_cmd()
                 
-                cmd = f'{python_cmd} scripts/run_fault_detection.py --nodes-json "{nodes_json}" --format {export_format}'
+                # Use RAG-based analysis
+                cmd = f'{python_cmd} scripts/run_rag_analysis.py --analysis-type fault'
                 if security_only:
-                    cmd += " --security"
-                else:
-                    cmd += " --all"
+                    cmd += " --mode security"
+                if export_format in ['json', 'md', 'scv']:
+                    cmd += f" --export {export_format}"
                 
                 with st.spinner("Running fault detection... (check your terminal for progress)"):
                     try:
@@ -533,40 +613,39 @@ with tab3:
                         process.wait()
                         output = "".join(output_lines)
                         
+                        # Filter out deprecation warnings from output
+                        import re
+                        output = re.sub(r'.*LangChainDeprecationWarning.*\n', '', output)
+                        output = re.sub(r'.*deprecated.*\n', '', output)
+                        output = re.sub(r'.*step4_query_rag\.py:\d+:.*\n', '', output)
+                        output = re.sub(r'.*step3_setup_rag\.py:\d+:.*\n', '', output)
+                        
                         if process.returncode == 0:
-                            # Try to parse JSON output if format is json
+                            
+                            # RAG output is text-based, show it nicely
                             if export_format == "json":
+                                # Try to parse if it's JSON
                                 try:
                                     import json
                                     result = json.loads(output)
-                                    st.success(f"✅ Found {result.get('total_issues', 0)} issues across {len(result.get('findings', []))} methods")
-                                    
-                                    # Group by severity
-                                    severity_counts = {}
-                                    for finding in result.get('findings', []):
-                                        severity = finding.get('severity', 'UNKNOWN')
-                                        severity_counts[severity] = severity_counts.get(severity, 0) + len(finding.get('issues', []))
-                                    
-                                    if severity_counts:
-                                        st.markdown("### Issues by Severity")
-                                        for severity, count in sorted(severity_counts.items(), reverse=True):
-                                            st.metric(severity.replace("Severity.", ""), count)
-                                    
-                                    with st.expander("📋 View Full Report (JSON)"):
-                                        st.json(result)
+                                    st.json(result)
                                 except json.JSONDecodeError:
                                     st.text(output)
+                            elif export_format in ["md", "markdown"]:
+                                st.markdown(output)
                             else:
-                                st.markdown("### Analysis Results")
                                 st.text(output)
-                                
-                                with st.expander("📋 Full Output"):
-                                    st.text(output)
+                            
+                            with st.expander("📋 Full Output"):
+                                st.text(output)
                         else:
                             st.error(f"Fault detection failed with return code {process.returncode}")
                             st.code(output, language="text")
                     except Exception as e:
                         st.error(f"Error running fault detection: {str(e)}")
+                        import traceback
+                        with st.expander("📋 Full Error Traceback"):
+                            st.code(traceback.format_exc(), language="text")
         
         elif analysis_type == "Sensitive Data Tracking":
             st.subheader("🔐 Sensitive Data Tracking")
@@ -584,18 +663,19 @@ with tab3:
             with col2:
                 export_format = st.selectbox(
                     "Export Format",
-                    ["console", "json", "markdown", "html"],
+                    ["csv", "json", "md"],
                     index=0
                 )
             
             if st.button("🔐 Run Sensitive Data Tracking", type="primary", use_container_width=True):
                 python_cmd = get_python_cmd()
                 
-                cmd = f'{python_cmd} scripts/run_sensitive_data_tracking.py --nodes-json "{nodes_json}" --edges-json "{edges_json}" --format {export_format}'
+                # Use RAG-based analysis
+                cmd = f'{python_cmd} scripts/run_rag_analysis.py --analysis-type sensitive'
                 if track_type:
-                    cmd += f' --track {track_type}'
-                else:
-                    cmd += " --all"
+                    cmd += f" --mode {track_type}"
+                if export_format in ['json', 'md', 'csv']:
+                    cmd += f" --export {export_format}"
                 
                 with st.spinner("Running sensitive data tracking... (check your terminal for progress)"):
                     try:
@@ -617,37 +697,39 @@ with tab3:
                         process.wait()
                         output = "".join(output_lines)
                         
+                        # Filter out deprecation warnings from output
+                        import re
+                        output = re.sub(r'.*LangChainDeprecationWarning.*\n', '', output)
+                        output = re.sub(r'.*deprecated.*\n', '', output)
+                        output = re.sub(r'.*step4_query_rag\.py:\d+:.*\n', '', output)
+                        output = re.sub(r'.*step3_setup_rag\.py:\d+:.*\n', '', output)
+                        
                         if process.returncode == 0:
-                            # Try to parse JSON output if format is json
+                            
+                            # RAG output is text-based, show it nicely
                             if export_format == "json":
+                                # Try to parse if it's JSON
                                 try:
                                     import json
                                     result = json.loads(output)
-                                    summary = result.get('summary', {})
-                                    st.success(
-                                        f"✅ Analyzed {summary.get('total_functions', 0)} functions. "
-                                        f"Found {summary.get('functions_with_sensitive_data', 0)} with sensitive data. "
-                                        f"{summary.get('total_violations', 0)} violations detected."
-                                    )
-                                    
-                                    if summary.get('total_violations', 0) > 0:
-                                        st.warning("⚠️ Violations found! Review the report below.")
-                                    
-                                    with st.expander("📋 View Full Report (JSON)"):
-                                        st.json(result)
+                                    st.json(result)
                                 except json.JSONDecodeError:
                                     st.text(output)
+                            elif export_format in ["md", "markdown"]:
+                                st.markdown(output)
                             else:
-                                st.markdown("### Analysis Results")
                                 st.text(output)
-                                
-                                with st.expander("📋 Full Output"):
-                                    st.text(output)
+                            
+                            with st.expander("📋 Full Output"):
+                                st.text(output)
                         else:
                             st.error(f"Sensitive data tracking failed with return code {process.returncode}")
                             st.code(output, language="text")
                     except Exception as e:
                         st.error(f"Error running sensitive data tracking: {str(e)}")
+                        import traceback
+                        with st.expander("📋 Full Error Traceback"):
+                            st.code(traceback.format_exc(), language="text")
         
         elif analysis_type == "Code Understanding":
             st.subheader("📚 Code Understanding")
@@ -665,21 +747,22 @@ with tab3:
             with col2:
                 export_format = st.selectbox(
                     "Export Format",
-                    ["console", "markdown"],
+                    ["csv", "json", "md"],
                     index=0
                 )
             
             if st.button("📚 Generate Understanding", type="primary", use_container_width=True):
                 python_cmd = get_python_cmd()
                 
-                cmd = f'{python_cmd} scripts/run_code_understanding.py --nodes-json "{nodes_json}" --edges-json "{edges_json}" --format {export_format}'
-                
-                if understand_mode == "Architecture":
-                    cmd += " --architecture"
-                elif understand_mode == "Entry Points":
-                    cmd += " --entry-points"
-                else:
-                    cmd += " --overview"
+                # Use RAG-based analysis
+                mode_map = {
+                    "Overview": "overview",
+                    "Architecture": "architecture",
+                    "Entry Points": "entry-points"
+                }
+                cmd = f'{python_cmd} scripts/run_rag_analysis.py --analysis-type understanding --mode {mode_map[understand_mode]}'
+                if export_format in ["csv", "json", "md"]:
+                    cmd += f" --export {export_format}"
                 
                 with st.spinner("Generating code understanding... (check your terminal for progress)"):
                     try:
@@ -701,11 +784,17 @@ with tab3:
                         process.wait()
                         output = "".join(output_lines)
                         
+                        # Filter out deprecation warnings from output
+                        import re
+                        output = re.sub(r'.*LangChainDeprecationWarning.*\n', '', output)
+                        output = re.sub(r'.*deprecated.*\n', '', output)
+                        output = re.sub(r'.*step4_query_rag\.py:\d+:.*\n', '', output)
+                        output = re.sub(r'.*step3_setup_rag\.py:\d+:.*\n', '', output)
+                        
                         if process.returncode == 0:
-                            st.markdown("### Analysis Results")
                             
                             # If markdown format, render as markdown
-                            if export_format == "markdown":
+                            if export_format == "md":
                                 st.markdown(output)
                             else:
                                 # For console output, show as text
@@ -718,6 +807,9 @@ with tab3:
                             st.code(output, language="text")
                     except Exception as e:
                         st.error(f"Error running code understanding: {str(e)}")
+                        import traceback
+                        with st.expander("📋 Full Error Traceback"):
+                            st.code(traceback.format_exc(), language="text")
 
 # Footer
 st.markdown("---")

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Extract CPG nodes and edges JSON from CPG binary file.
-Outputs to cpg_rag_system/data/ directory.
+Uses cpg_rag_complete/step2_extract_json.py for extraction.
+Outputs to cpg_rag_complete/data/ directory.
 """
 
 import argparse
@@ -20,8 +21,8 @@ def main():
     )
     parser.add_argument(
         '--output', '-o',
-        default='cpg_rag_system/data',
-        help='Output directory (default: cpg_rag_system/data)'
+        default='cpg_rag_complete/data',
+        help='Output directory (default: cpg_rag_complete/data)'
     )
     parser.add_argument(
         '--joern-path',
@@ -50,8 +51,9 @@ def main():
     print(f"📤 Extracting CPG JSON from {cpg_path}")
     print(f"📁 Output directory: {output_dir}")
     
-    # Use the extract_from_cpg.py script from cpg_rag_system
-    extract_script = Path(__file__).parent.parent / "cpg_rag_system" / "cpg_generators" / "extract_from_cpg.py"
+    # Use step2_extract_json.py from cpg_rag_complete
+    # This extracts nodes and edges using the same method (Joern-based extraction)
+    extract_script = Path(__file__).parent.parent / "cpg_rag_complete" / "step2_extract_json.py"
     
     if not extract_script.exists():
         print(f"❌ Extract script not found: {extract_script}")
@@ -60,7 +62,7 @@ def main():
     cmd = [
         sys.executable,
         str(extract_script),
-        '--cpg', str(cpg_path),
+        str(cpg_path),
         '--output', str(output_dir)
     ]
     
@@ -68,8 +70,6 @@ def main():
         cmd.extend(['--joern-path', args.joern_path])
     if args.source_dir:
         cmd.extend(['--source-dir', args.source_dir])
-    if args.no_enhance:
-        cmd.append('--no-enhance')
     
     print(f"\n⚙️  Running: {' '.join(cmd)}")
     

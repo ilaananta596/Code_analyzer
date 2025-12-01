@@ -1,0 +1,23 @@
+# CPG RAG Complete - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core LangChain packages
+langchain>=0.1.0,<0.3.0
+langchain-community>=0.0.13,<0.3.0
+
+# Vector database
+chromadb>=0.4.22,<0.5.0
+
+# Ollama integration
+ollama>=0.1.6
+
+# Neo4j (optional - for advanced graph queries)
+neo4j>=5.16.0
+
+# Utilities
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+numpy>=1.26.0
+
+# For export functionality
+# reportlab>=4.0.0  # Uncomment for PDF export

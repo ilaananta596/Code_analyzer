@@ -1,7 +1,8 @@
 # GraphRAG Code Analysis System
 
 A GraphRAG-style code analysis system that combines semantic retrieval, graph analysis, and LLM reasoning to answer questions about codebases. Includes fault detection, sensitive data tracking, and code understanding features.
-![Architecture Diagram](Architecture.png)
+
+<img src="Architecture.png" alt="Architecture Diagram" width="500">
 
 ## Prerequisites
 

@@ -47,7 +47,7 @@ def find_joern_parse(joern_cli_path: str = None) -> str:
     
     for path in local_paths:
         if path.exists():
-            print(f"   📍 Found joern-parse in local directory: {path}")
+            print(f" Found joern-parse in local directory: {path}")
             return str(path)
     
     # Common installation paths
@@ -84,20 +84,20 @@ def generate_cpg(source_dir: str, output_file: str, joern_cli_path: str = None,
     output_path = Path(output_file).resolve()
     
     if not source_path.exists():
-        print(f"❌ Error: Source directory does not exist: {source_path}")
+        print(f"Error: Source directory does not exist: {source_path}")
         return False
     
     # Find joern-parse
     joern_parse = find_joern_parse(joern_cli_path)
     if not joern_parse:
-        print("❌ Error: joern-parse not found!")
-        print("   Please install Joern CLI: https://joern.io/")
-        print("   Or set JOERN_CLI_PATH in your .env file")
+        print("Error: joern-parse not found!")
+        print("Please install Joern CLI: https://joern.io/")
+        print("Or set JOERN_CLI_PATH in your .env file")
         return False
     
-    print(f"📁 Source directory: {source_path}")
-    print(f"📦 Output file: {output_path}")
-    print(f"🔧 Using joern-parse: {joern_parse}")
+    print(f"Source directory: {source_path}")
+    print(f"Output file: {output_path}")
+    print(f"Using joern-parse: {joern_parse}")
     
     # Build command
     cmd = [joern_parse, str(source_path), "-o", str(output_path)]
@@ -105,7 +105,7 @@ def generate_cpg(source_dir: str, output_file: str, joern_cli_path: str = None,
     if language:
         cmd.extend(["--language", language])
     
-    print(f"\n🚀 Running: {' '.join(cmd)}\n")
+    print(f"\n Running: {' '.join(cmd)}\n")
     
     try:
         result = subprocess.run(
@@ -118,15 +118,15 @@ def generate_cpg(source_dir: str, output_file: str, joern_cli_path: str = None,
         if result.returncode == 0:
             if output_path.exists():
                 size_mb = output_path.stat().st_size / (1024 * 1024)
-                print(f"✅ CPG generated successfully!")
-                print(f"   File: {output_path}")
-                print(f"   Size: {size_mb:.2f} MB")
+                print(f" CPG generated successfully!")
+                print(f" File: {output_path}")
+                print(f" Size: {size_mb:.2f} MB")
                 return True
             else:
-                print(f"❌ Command succeeded but output file not found: {output_path}")
+                print(f" Command succeeded but output file not found: {output_path}")
                 return False
         else:
-            print(f"❌ joern-parse failed with return code {result.returncode}")
+            print(f" joern-parse failed with return code {result.returncode}")
             if result.stdout:
                 print(f"   stdout: {result.stdout}")
             if result.stderr:
@@ -134,13 +134,13 @@ def generate_cpg(source_dir: str, output_file: str, joern_cli_path: str = None,
             return False
             
     except subprocess.TimeoutExpired:
-        print("❌ joern-parse timed out after 10 minutes")
+        print(" joern-parse timed out after 10 minutes")
         return False
     except FileNotFoundError:
-        print(f"❌ Could not execute joern-parse: {joern_parse}")
+        print(f" Could not execute joern-parse: {joern_parse}")
         return False
     except Exception as e:
-        print(f"❌ Error running joern-parse: {e}")
+        print(f" Error running joern-parse: {e}")
         return False
 
 
@@ -195,12 +195,12 @@ Examples:
     
     if success:
         print("\n" + "=" * 60)
-        print("✅ Step 1 Complete!")
+        print(" Step 1 Complete!")
         print("=" * 60)
         print("\nNext step:")
         print(f"    python step2_extract_json.py {args.output}")
     else:
-        print("\n❌ Step 1 Failed!")
+        print("\n Step 1 Failed!")
         sys.exit(1)
 
 

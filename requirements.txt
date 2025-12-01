@@ -6,6 +6,9 @@ transformers>=4.25.0
 torch>=2.0.0
 numpy>=1.21.0
 scikit-learn>=1.0.0
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-ollama>=0.1.0
 
 # For LLM inference (open-source models)
 # Using transformers library for local inference

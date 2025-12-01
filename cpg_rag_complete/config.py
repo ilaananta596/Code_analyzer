@@ -11,6 +11,15 @@ load_dotenv()
 class Config:
     """Central configuration for the CPG RAG system."""
     
+    # --- Disable ChromaDB telemetry globally ---
+    TELEMETRY_DISABLE = True
+    if TELEMETRY_DISABLE:
+        # Completely silence all Chroma/PostHog telemetry noise
+        os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
+        os.environ["ANONYMIZED_TELEMETRY"] = "false"
+        os.environ["POSTHOG_API_KEY"] = ""
+        os.environ["POSTHOG_DISABLED"] = "true"
+
     # Paths
     BASE_DIR = Path(__file__).parent
     DATA_DIR = BASE_DIR / "data"
@@ -30,25 +39,27 @@ class Config:
     OLLAMA_EMBEDDING_MODEL = os.getenv('OLLAMA_EMBEDDING_MODEL', 'nomic-embed-text')
     OLLAMA_TEMPERATURE = float(os.getenv('OLLAMA_TEMPERATURE', '0'))
     
-    # Neo4j settings (optional - for graph queries)
+    # Neo4j settings (optional)
     NEO4J_URI = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
     NEO4J_USER = os.getenv('NEO4J_USER', 'neo4j')
     NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'cpgragagent123')
     
-    # ChromaDB collection names
+    # Chroma collections
     SEMANTIC_COLLECTION = 'cpg_semantic'
     STRUCTURAL_COLLECTION = 'cpg_structural'
     FAULT_COLLECTION = 'cpg_fault'
-    
+    HYBRID_COLLECTION = 'cpg_hybrid'
+
     # RAG settings
     TOP_K_RESULTS = 5
-    GRAPH_CONTEXT_DEPTH = 2
+    GRAPH_DEPTH = int(os.getenv("GRAPH_DEPTH", 3))
+    GRAPH_CONTEXT_DEPTH = GRAPH_DEPTH
     MAX_CONTEXT_NODES = 10
     MAX_CODE_LENGTH = 1200  # Max characters of code to include in context
     
     # Joern settings
-    JOERN_CLI_PATH = os.getenv('JOERN_CLI_PATH', '')  # Set if not in PATH
-    
+    JOERN_CLI_PATH = os.getenv('JOERN_CLI_PATH', '')
+
     @classmethod
     def ensure_directories(cls):
         """Create necessary directories if they don't exist."""
@@ -72,4 +83,8 @@ class Config:
         print(f"  Embedding Model: {cls.OLLAMA_EMBEDDING_MODEL}")
         print()
         print(f"  Neo4j URI: {cls.NEO4J_URI}")
+        print()
+        print(f"  Graph Depth: {cls.GRAPH_DEPTH}")
+        print(f"  Hybrid Collection: {cls.HYBRID_COLLECTION}")
+        print(f"  Telemetry Disabled: {cls.TELEMETRY_DISABLE}")
         print("=" * 60)

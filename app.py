@@ -610,7 +610,7 @@ with tab3:
                 export_format = st.selectbox(
                     "Export Format",
                     #["console", "json", "markdown", "html"],
-                    ["csv", "json", "md"],
+                    [ "json", "md"],
                     index=0
                 )
             
@@ -696,7 +696,7 @@ with tab3:
             with col2:
                 export_format = st.selectbox(
                     "Export Format",
-                    ["csv", "json", "md"],
+                    [ "json", "md"],
                     index=0
                 )
             
@@ -705,8 +705,8 @@ with tab3:
                 
                 # Use RAG-based analysis
                 cmd = f'{python_cmd} scripts/run_rag_analysis.py --analysis-type sensitive'
-                if track_type:
-                    cmd += f" --mode {track_type}"
+                # if track_type:
+                #     cmd += f" --mode {track_type}"
                 if export_format in ['json', 'md', 'csv']:
                     cmd += f" --export {export_format}"
                 
@@ -780,7 +780,7 @@ with tab3:
             with col2:
                 export_format = st.selectbox(
                     "Export Format",
-                    ["csv", "json", "md"],
+                    ["json", "md"],
                     index=0
                 )
             

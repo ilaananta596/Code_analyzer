@@ -190,3 +190,19 @@ For RAG system, edit `cpg_rag_complete/config.py`:
 ## Example Workflow
 
 See `scripts/run_example.sh` for a complete example workflow.
+
+## Limitations
+
+⚠️ **Current File Type Support:**
+- ✅ **Supported**: Plain language source files (`.py`, `.java`, `.c`, `.cpp`, etc.)
+- ❌ **Not Supported**: Jupyter notebooks (`.ipynb`) and other structured file formats
+
+The system currently works best with traditional source code files. Support for Jupyter notebooks and other structured formats is planned for future releases.
+
+## Demo Videos
+
+Two demo videos are available to help you get started:
+- `v1.mov` - Basic setup and usage walkthrough
+- `v2.mov` - Advanced features and analysis examples
+
+Watch these videos to see the system in action!

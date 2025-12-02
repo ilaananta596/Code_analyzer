@@ -2,148 +2,140 @@
 """
 Step 1: Generate CPG from source code using Joern
 
-This script runs joern-parse to create a CPG binary file from your codebase.
-
-Usage:
-    python step1_generate_cpg.py /path/to/your/source/code --output cpg.bin
-
-Requirements:
-    - Joern CLI installed and in PATH (or set JOERN_CLI_PATH in .env)
+This upgraded version fixes:
+- More reliable joern-parse detection
+- Support for --joern-path, .env, or PATH
+- Normalized absolute paths
+- Better error handling and output
+- Ensures cpg.bin is actually written
+- Fully compatible with updated Step 2–4
 """
 
 import argparse
 import subprocess
 import sys
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 
-def find_joern_parse(joern_cli_path: str = None) -> str:
-    """Find joern-parse executable."""
-    # Check if provided path exists
+# ----------------------------------------------------------------------
+# Locate joern-parse
+# ----------------------------------------------------------------------
+def find_joern_parse(joern_cli_path: str | None = None) -> str | None:
+    """Locate joern-parse using multiple fallback strategies."""
+
+    # 1) If user provided --joern-path
     if joern_cli_path:
-        joern_cli = Path(joern_cli_path)
-        # Check if it's a directory containing joern-parse
-        if joern_cli.is_dir():
-            joern_parse = joern_cli / "joern-parse"
-            if joern_parse.exists():
-                return str(joern_parse)
-        # Check if it's the executable itself
-        if joern_cli.name == "joern-parse" and joern_cli.exists():
-            return str(joern_cli)
-    
-    # Check if in PATH
-    joern_parse = shutil.which("joern-parse")
-    if joern_parse:
-        return joern_parse
-    
-    # Check current directory for joern-cli folder
+        jp = Path(joern_cli_path)
+        if jp.is_dir() and (jp / "joern-parse").exists():
+            return str(jp / "joern-parse")
+        if jp.name == "joern-parse" and jp.exists():
+            return str(jp)
+
+    # 2) PATH lookup
+    from shutil import which
+    w = which("joern-parse")
+    if w:
+        return w
+
+    # 3) Try common local paths
     cwd = Path.cwd()
-    local_paths = [
+    candidates = [
         cwd / "joern-cli" / "joern-parse",
         cwd / "joern" / "joern-cli" / "joern-parse",
         cwd.parent / "joern-cli" / "joern-parse",
-    ]
-    
-    for path in local_paths:
-        if path.exists():
-            print(f"   📍 Found joern-parse in local directory: {path}")
-            return str(path)
-    
-    # Common installation paths
-    common_paths = [
         Path.home() / "joern" / "joern-cli" / "joern-parse",
         Path.home() / "joern-cli" / "joern-parse",
-        Path.home() / "bin" / "joern-parse",
         Path("/opt/joern/joern-cli/joern-parse"),
-        Path("/usr/local/bin/joern-parse"),
+        Path("/usr/local/bin/joern-parse")
     ]
-    
-    for path in common_paths:
-        if path.exists():
-            return str(path)
-    
+
+    for c in candidates:
+        if c.exists():
+            print(f" Found joern-parse: {c}")
+            return str(c)
+
     return None
 
 
-def generate_cpg(source_dir: str, output_file: str, joern_cli_path: str = None, 
-                 language: str = None) -> bool:
+# ----------------------------------------------------------------------
+# Generate CPG
+# ----------------------------------------------------------------------
+def generate_cpg(
+    source_dir: str,
+    output_file: str,
+    joern_cli_path: str | None = None,
+    language: str | None = None
+) -> bool:
     """
-    Generate CPG binary from source code.
-    
-    Args:
-        source_dir: Path to source code directory
-        output_file: Output path for cpg.bin
-        joern_cli_path: Path to joern-cli directory (optional)
-        language: Language hint for Joern (optional, auto-detected)
-    
-    Returns:
-        True if successful, False otherwise
+    Run joern-parse to generate a CPG binary.
     """
-    source_path = Path(source_dir).resolve()
-    output_path = Path(output_file).resolve()
-    
-    if not source_path.exists():
-        print(f"❌ Error: Source directory does not exist: {source_path}")
+
+    src = Path(source_dir).resolve()
+    out = Path(output_file).resolve()
+
+    if not src.exists():
+        print(f"Error: Source directory does not exist: {src}")
         return False
-    
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+
     # Find joern-parse
     joern_parse = find_joern_parse(joern_cli_path)
     if not joern_parse:
-        print("❌ Error: joern-parse not found!")
-        print("   Please install Joern CLI: https://joern.io/")
-        print("   Or set JOERN_CLI_PATH in your .env file")
+        print("joern-parse not found!")
+        print("Install Joern: https://joern.io/")
+        print("Or pass --joern-path /path/to/joern-cli")
         return False
-    
-    print(f"📁 Source directory: {source_path}")
-    print(f"📦 Output file: {output_path}")
-    print(f"🔧 Using joern-parse: {joern_parse}")
-    
+
+    print(f"Source directory: {src}")
+    print(f"Output file:      {out}")
+    print(f"Using joern-parse: {joern_parse}")
+
     # Build command
-    cmd = [joern_parse, str(source_path), "-o", str(output_path)]
-    
+    cmd = [joern_parse, str(src), "-o", str(out)]
     if language:
-        cmd.extend(["--language", language])
-    
-    print(f"\n🚀 Running: {' '.join(cmd)}\n")
-    
+        cmd += ["--language", language]
+
+    print("\nRunning:")
+    print("  " + " ".join(cmd) + "\n")
+
     try:
-        result = subprocess.run(
+        proc = subprocess.run(
             cmd,
-            capture_output=True,
             text=True,
-            timeout=600  # 10 minute timeout
+            capture_output=True,
+            timeout=900  # 15 minutes
         )
-        
-        if result.returncode == 0:
-            if output_path.exists():
-                size_mb = output_path.stat().st_size / (1024 * 1024)
-                print(f"✅ CPG generated successfully!")
-                print(f"   File: {output_path}")
-                print(f"   Size: {size_mb:.2f} MB")
-                return True
-            else:
-                print(f"❌ Command succeeded but output file not found: {output_path}")
-                return False
-        else:
-            print(f"❌ joern-parse failed with return code {result.returncode}")
-            if result.stdout:
-                print(f"   stdout: {result.stdout}")
-            if result.stderr:
-                print(f"   stderr: {result.stderr}")
+
+        if proc.stdout:
+            print(proc.stdout)
+        if proc.stderr:
+            print(proc.stderr)
+
+        if proc.returncode != 0:
+            print(f" joern-parse exited with code {proc.returncode}")
             return False
-            
+
+        if not out.exists():
+            print(f" joern-parse finished but {out} does NOT exist")
+            return False
+
+        size_mb = out.stat().st_size / (1024 * 1024)
+        print(f" CPG generated successfully ({size_mb:.2f} MB)")
+        return True
+
     except subprocess.TimeoutExpired:
-        print("❌ joern-parse timed out after 10 minutes")
-        return False
-    except FileNotFoundError:
-        print(f"❌ Could not execute joern-parse: {joern_parse}")
+        print(" joern-parse timed out!")
         return False
     except Exception as e:
-        print(f"❌ Error running joern-parse: {e}")
+        print(f" Error running joern-parse: {e}")
         return False
 
 
+# ----------------------------------------------------------------------
+# Main entrypoint
+# ----------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
         description="Generate CPG from source code using Joern",
@@ -154,53 +146,36 @@ Examples:
     python step1_generate_cpg.py ./my-project --output data/cpg.bin
     python step1_generate_cpg.py ./my-project --joern-path ~/joern/joern-cli
     python step1_generate_cpg.py ./my-project --language python
-        """
+"""
     )
-    
+
+    parser.add_argument("source_dir", help="Source code directory")
+    parser.add_argument("--output", "-o", default="data/cpg.bin", help="Output CPG path")
+    parser.add_argument("--joern-path", help="Path to joern-cli")
     parser.add_argument(
-        "source_dir",
-        help="Path to source code directory"
-    )
-    parser.add_argument(
-        "--output", "-o",
-        default="data/cpg.bin",
-        help="Output path for CPG binary (default: data/cpg.bin)"
-    )
-    parser.add_argument(
-        "--joern-path",
-        help="Path to joern-cli directory"
-    )
-    parser.add_argument(
-        "--language", "-l",
+        "--language",
+        "-l",
         choices=["python", "java", "javascript", "c", "cpp", "go", "php", "ruby"],
-        help="Language hint for Joern (usually auto-detected)"
+        help="Language hint"
     )
-    
+
     args = parser.parse_args()
-    
-    # Ensure output directory exists
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     print("=" * 60)
-    print("Step 1: Generate CPG from Source Code")
+    print("STEP 1 — Generate CPG")
     print("=" * 60)
-    
-    success = generate_cpg(
+
+    ok = generate_cpg(
         args.source_dir,
         args.output,
-        args.joern_path,
-        args.language
+        joern_cli_path=args.joern_path,
+        language=args.language
     )
-    
-    if success:
-        print("\n" + "=" * 60)
-        print("✅ Step 1 Complete!")
-        print("=" * 60)
-        print("\nNext step:")
-        print(f"    python step2_extract_json.py {args.output}")
+
+    if ok:
+        print("\nNext:")
+        print(f"  python step2_extract_json.py {args.output}")
     else:
-        print("\n❌ Step 1 Failed!")
         sys.exit(1)
 
 

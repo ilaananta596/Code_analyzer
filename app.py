@@ -284,10 +284,25 @@ with tab1:
                     st.session_state.cpg_json_extracted = False
                     st.session_state.rag_setup = False
                     
+                    # Read source directory from source_info.json if available
+                    source_dir = None
+                    source_info_path = cpg_path.with_suffix('.source_info.json')
+                    if source_info_path.exists():
+                        try:
+                            with open(source_info_path, 'r') as f:
+                                source_info = json.load(f)
+                                source_dir = source_info.get('source_dir')
+                                if source_dir and Path(source_dir).exists():
+                                    st.session_state.source_dir = source_dir
+                        except Exception as e:
+                            st.warning(f"Could not read source info: {e}")
+                    
                     # Automatically extract CPG JSON after building CPG
                     with st.spinner("Extracting CPG nodes and edges..."):
                         python_cmd = get_python_cmd()
                         extract_cmd = f'{python_cmd} scripts/extract_cpg_json.py "{cpg_path}" --output cpg_rag_complete/data'
+                        if source_dir:
+                            extract_cmd += f' --source-dir "{source_dir}"'
                         extract_success, extract_output = run_command(extract_cmd, "Extracting CPG JSON...")
                         if extract_success:
                             st.session_state.cpg_json_extracted = True
@@ -305,6 +320,8 @@ with tab1:
                             # Setup RAG system after extraction
                             with st.spinner("Setting up RAG system (this may take a few minutes)..."):
                                 setup_cmd = f'{python_cmd} cpg_rag_complete/step3_setup_rag.py --data-dir cpg_rag_complete/data --force'
+                                if source_dir:
+                                    setup_cmd += f' --source-dir "{source_dir}"'
                                 setup_success, setup_output = run_command(setup_cmd, "Setting up RAG...")
                                 if setup_success:
                                     st.session_state.rag_setup = True
@@ -536,7 +553,7 @@ with tab3:
         st.code("python scripts/extract_cpg_json.py data/cpg/<project>.cpg.bin")
     elif not chroma_dir.exists() or not any(chroma_dir.iterdir()):
         st.warning("⚠️ RAG system not set up. Please run setup first:")
-        st.code("python cpg_rag_complete/step3_setup_rag.py --data-dir cpg_rag_complete/data")
+        st.code("python cpg_rag_complete/step3_setup_rag.py --data-dir cpg_rag_complete/data --source-dir <source_dir>")
         if st.button("🔧 Setup RAG Now", use_container_width=True):
             # Clear old ChromaDB first
             chroma_dir = Path("cpg_rag_complete/chroma_db")
@@ -547,8 +564,22 @@ with tab3:
                 except Exception as e:
                     st.warning(f"Could not clear old ChromaDB: {e}")
             
+            # Try to get source directory from source_info.json
+            source_dir = None
+            if st.session_state.get('cpg_path'):
+                source_info_path = Path(st.session_state.cpg_path).with_suffix('.source_info.json')
+                if source_info_path.exists():
+                    try:
+                        with open(source_info_path, 'r') as f:
+                            source_info = json.load(f)
+                            source_dir = source_info.get('source_dir')
+                    except Exception:
+                        pass
+            
             python_cmd = get_python_cmd()
             setup_cmd = f'{python_cmd} cpg_rag_complete/step3_setup_rag.py --data-dir cpg_rag_complete/data --force'
+            if source_dir and Path(source_dir).exists():
+                setup_cmd += f' --source-dir "{source_dir}"'
             with st.spinner("Setting up RAG system (this may take a few minutes)..."):
                 setup_success, setup_output = run_command(setup_cmd, "Setting up RAG...")
                 if setup_success:
@@ -654,11 +685,13 @@ with tab3:
             col1, col2 = st.columns(2)
             
             with col1:
-                track_type = st.text_input(
-                    "Track Specific Type (optional)",
-                    placeholder="e.g., password, api_key, token",
-                    help="Leave empty to track all sensitive data"
-                )
+                st.header("Sensitive info like passwords, API keys, tokens, PII")
+                
+                # track_type = st.text_input(
+                #     "Track Specific Type (optional)",
+                #     placeholder="e.g., password, api_key, token",
+                #     help="Leave empty to track all sensitive data"
+                # )
             
             with col2:
                 export_format = st.selectbox(
@@ -821,4 +854,3 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-

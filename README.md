@@ -202,7 +202,7 @@ The system currently works best with traditional source code files. Support for 
 ## Demo Videos
 
 Two demo videos are available to help you get started:
-- `v1.mov` - Basic setup and usage walkthrough
-- `v2.mov` - Advanced features and analysis examples
+- [`v1.mov`](https://indianinstituteofscience-my.sharepoint.com/:v:/g/personal/ilaananta_iisc_ac_in/IQCun_2Too0URrrYd3yl9gWDAbaf6nqmMG3Qz1SEwkOEej8?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=KAbFvK) - Basic setup and usage walkthrough
+- [`v2.mov`](https://indianinstituteofscience-my.sharepoint.com/:v:/g/personal/ilaananta_iisc_ac_in/IQD_sHH4_oorRalKFVldz05KAZPFSkvTC4HPCyYCI3seo9U?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=fEqwzR) - Advanced features and analysis examples
 
 Watch these videos to see the system in action!

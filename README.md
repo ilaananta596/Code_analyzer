@@ -23,6 +23,8 @@ A GraphRAG-style code analysis system that combines semantic retrieval, graph an
 ```bash
 conda create -n graphrag python=3.11
 conda activate graphrag
+git clone https://github.com/ilaananta596/Code_analyzer
+cd Code_analyzer
 pip install -r requirements.txt
 ```
 

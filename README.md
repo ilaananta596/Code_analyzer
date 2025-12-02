@@ -194,7 +194,7 @@ See `scripts/run_example.sh` for a complete example workflow.
 ## Limitations
 
 ⚠️ **Current File Type Support:**
-- ✅ **Supported**: Plain language source files (`.py`, `.java`, `.c`, `.cpp`, etc.)
+- ✅ **Supported**: Plain language source files (`.py`, `.java`, etc.)
 - ❌ **Not Supported**: Jupyter notebooks (`.ipynb`) and other structured file formats
 
 The system currently works best with traditional source code files. Support for Jupyter notebooks and other structured formats is planned for future releases.
